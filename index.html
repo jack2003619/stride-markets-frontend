@@ -18,16 +18,16 @@
 .tradeTitle{font-size:30px;line-height:1.15;margin-bottom:18px}.tradeTitle span{color:#8f75c8}.outlinebtn{padding:12px 20px;border-radius:16px;background:transparent;border:1px solid #68567f;color:#ddd1ee;margin-bottom:22px}.tradeTabs{display:grid;grid-template-columns:1fr 1fr;background:#100d18;border:1px solid #2c2635;border-radius:25px;padding:10px;margin-bottom:20px}.tradeTabs button{padding:16px;border:0;background:transparent;border-radius:20px;font-size:19px;color:#bdb6c6}.tradeTabs .active{background:linear-gradient(120deg,#8a4cff,#6b3bd1);color:white}.chartbox{height:190px;border:1px solid #332b42;border-radius:22px;background:linear-gradient(180deg,rgba(139,77,255,.12),rgba(139,77,255,.02));padding:14px;overflow:hidden}.chartbox svg{width:100%;height:100%}.account,.formcard{border:1px solid #30293b;border-radius:25px;background:linear-gradient(145deg,rgba(40,35,56,.85),rgba(20,17,28,.9));padding:25px;margin-bottom:18px}.live{padding:7px 14px;border:1px solid #27755e;border-radius:18px;color:#8de0c4}.mode{display:grid;grid-template-columns:1fr 1fr;background:#0e0b15;border-radius:20px;padding:5px;margin-top:15px}.mode button{border:0;background:transparent;padding:15px;color:#9c96a6;font-weight:800}.mode .active{background:#00cf98;color:white;border-radius:16px}.formlabel{font-size:19px;margin:0 0 17px}.bigselect{height:78px}.amountinput{height:60px;background:#11101a;border:1px solid #302b3a;border-radius:18px;width:100%;padding:0 18px;font-size:24px}.tradebuttons{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:18px}.buy,.sell{padding:16px;border:0;border-radius:18px;font-weight:800;font-size:19px}.buy{background:#00cf98;color:#06150f}.sell{background:#4d2530;color:#ffd7dd}
 .walletcards{display:grid;grid-template-columns:1fr 1fr;gap:12px}.walletcard{padding:22px;border-radius:22px;background:rgba(32,28,43,.75);border:1px solid #342e40;cursor:pointer;transition:.18s}.walletcard:active{transform:scale(.985)}.walletcard b{display:block;font-size:23px;margin-top:8px}.history{margin-top:24px}.tx{display:flex;justify-content:space-between;padding:18px 0;border-bottom:1px solid #292432}.bottom{position:fixed;bottom:14px;left:50%;transform:translateX(-50%);width:min(660px,calc(100% - 30px));height:82px;border-radius:42px;background:rgba(17,14,25,.94);border:1px solid #282331;box-shadow:0 12px 45px rgba(0,0,0,.55);backdrop-filter:blur(20px);display:grid;grid-template-columns:repeat(5,1fr);z-index:30}.navbtn{border:0;background:transparent;color:#aaa5b4;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font-size:13px}.navico{font-size:25px;line-height:1}.navbtn.active{color:white}.navbtn.active .navico{width:56px;height:56px;margin-top:-28px;border-radius:50%;display:grid;place-items:center;background:#27213a;border:1px solid #8162a7;box-shadow:0 0 24px rgba(141,78,255,.85)}.toast{position:fixed;top:82px;left:50%;transform:translateX(-50%) translateY(-15px);background:#282235;border:1px solid #56466c;padding:12px 18px;border-radius:14px;opacity:0;pointer-events:none;transition:.25s;z-index:50}.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}.loading{opacity:.55;pointer-events:none}.empty{padding:30px 18px;text-align:center;border:1px dashed #393143;border-radius:22px;color:#91899e}.sectionhead a{cursor:pointer}
 @media(min-width:701px){.app{box-shadow:0 0 60px rgba(0,0,0,.45)}}@media(max-width:480px){.page{padding-left:18px;padding-right:18px}.profile{grid-template-columns:auto 1fr}.headicons{grid-column:1/-1;justify-content:flex-end;margin-top:-5px}.avatar{width:80px;height:80px}.name{font-size:32px}.amount{font-size:43px}.sectionhead h2{font-size:34px}.marketrow{grid-template-columns:62px 1fr 88px}.marketrow .miniChart{display:none}.pricecol{font-size:17px}.assetprice{left:25px;font-size:30px}.assetcard{flex-basis:88%}}
-</style>
+.connectstrip{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 15px;margin:0 0 14px;border:1px solid #342e40;background:rgba(29,25,39,.72);border-radius:17px}.connectstrip>div{display:grid;grid-template-columns:auto 1fr;column-gap:8px;align-items:center}.connectstrip b{font-size:14px}.connectstrip small{grid-column:2;color:#8f8998;font-size:11px;margin-top:2px}.dot{width:8px;height:8px;border-radius:50%;background:#67e6a1;box-shadow:0 0 12px rgba(103,230,161,.75)}.smallbtn{padding:9px 13px!important;font-size:12px!important}.marketrow{cursor:pointer}.marketrow:active,.assetcard:active,.walletcard:active{transform:scale(.99)}.modalback{position:fixed;inset:0;background:rgba(5,4,9,.68);backdrop-filter:blur(7px);z-index:60;display:grid;place-items:end center;padding:16px}.sheet{width:min(660px,100%);background:#18141f;border:1px solid #393043;border-radius:26px;padding:22px;box-shadow:0 -15px 60px rgba(0,0,0,.55)}.sheet h3{margin:0 0 7px;font-size:24px}.sheet p{color:#9d96a8;margin:0 0 20px;line-height:1.5}.sheet .sheetrow{display:grid;grid-template-columns:1fr 1fr;gap:10px}.sheet button{padding:14px;border-radius:14px;border:1px solid #3a3245;background:#241f2d;color:#fff;font-weight:700}.sheet button.primary{background:#7c4dff;border-color:#8d63ff}.sort b{cursor:pointer}.newsitem{cursor:pointer}</style>
 </head>
 <body>
 <div class="app">
 <header class="top"><div class="brand"><img src="logo.png"><b>Stride</b><span>MARKETS</span></div></header>
 <main id="home" class="page">
 <section class="profile"><div class="avatar">D</div><div><div class="name">Daniel</div><div class="vip">♛ VIP 0</div></div><div class="headicons"><button class="circlebtn" onclick="toast('Messages')">▢</button><button class="circlebtn" onclick="toast('Notifications')">♧</button></div></section>
-<section class="balance"><div class="eyebrow">TOTAL BALANCE</div><div class="amount">0.00 USDT <span class="eye">◉</span></div><div class="stats"><div class="stat">0.00 BTC</div><div class="stat active">↗ 0.00%</div></div></section>
+<section class="connectstrip"><div><span class="dot"></span><b id="connectionText">Wallet connected</b><small id="connectionSub">Demo account • ready to trade</small></div><button class="outlinebtn smallbtn" onclick="toggleConnection()">Connected</button></section><section class="balance"><div class="eyebrow">TOTAL BALANCE</div><div class="amount">0.00 USDT <span class="eye">◉</span></div><div class="stats"><div class="stat">0.00 BTC</div><div class="stat active">↗ 0.00%</div></div></section>
 <div class="actions">
-<div class="action" onclick="toast('Withdraw')"><div class="ico">↥</div><span>Withdraw</span></div><div class="action" onclick="toast('Send')"><div class="ico">◉</div><span>Send</span></div><div class="action" onclick="toast('Add Funds')"><div class="ico">⊕</div><span>Add Funds</span></div><div class="action" onclick="toast('More actions')"><div class="ico">•••</div><span>More</span></div>
+<div class="action" onclick="walletAction('Withdraw')"><div class="ico">↥</div><span>Withdraw</span></div><div class="action" onclick="walletAction('Send')"><div class="ico">◉</div><span>Send</span></div><div class="action" onclick="walletAction('Add Funds')"><div class="ico">⊕</div><span>Add Funds</span></div><div class="action" onclick="walletAction('More actions')"><div class="ico">•••</div><span>More</span></div>
 </div>
 <div class="sectionhead"><h2>Popular Assets</h2><a onclick="navigate('markets')">View All</a></div>
 <div class="scroll" id="popular"></div>
@@ -55,8 +55,16 @@ const assets=[
 
 function coin(a){return a.logo?'<img src="'+a.logo+'" alt="">':'<span class="coinletter">'+a.s[0]+'</span>'}
 function marketRow(a){
- return '<div class="marketrow" data-name="'+(a.n+' '+a.s).toLowerCase()+'" data-symbol="'+a.s+'"><div class="coin">'+coin(a)+'</div><div><div class="mname">'+a.s+'</div><div class="sub">'+a.n+'</div></div><div class="miniChart"></div><div class="pricecol">$'+a.p+'<div class="pct '+(a.c.startsWith('-')?'down':'')+'">'+a.c+'</div></div></div>'
+ return '<div class="marketrow" onclick="openTrade(\''+a.s+'\')" data-name="'+(a.n+' '+a.s).toLowerCase()+'" data-symbol="'+a.s+'"><div class="coin">'+coin(a)+'</div><div><div class="mname">'+a.s+'</div><div class="sub">'+a.n+'</div></div><div class="miniChart"></div><div class="pricecol">$'+a.p+'<div class="pct '+(a.c.startsWith('-')?'down':'')+'">'+a.c+'</div></div></div>'
 }
+function saveState(){localStorage.setItem('stride_connected',String(window.strideConnected!==false));}
+function loadState(){window.strideConnected=localStorage.getItem('stride_connected')!=='false';syncConnection();}
+function syncConnection(){const ok=window.strideConnected!==false;const b=document.querySelector('.connectstrip button');if(b)b.textContent=ok?'Connected':'Connect';const t=document.getElementById('connectionText');const sub=document.getElementById('connectionSub');if(t)t.textContent=ok?'Wallet connected':'Wallet disconnected';if(sub)sub.textContent=ok?'Demo account • ready to trade':'Connect a wallet to continue';}
+function toggleConnection(){window.strideConnected=window.strideConnected===false;saveState();syncConnection();toast(window.strideConnected?'Wallet connected':'Wallet disconnected');}
+function walletAction(name){if(name==='More actions'){navigate('wallet');return}if(window.strideConnected===false){toast('Connect wallet first');return}showSheet(name);}
+function showSheet(name){const old=document.querySelector('.modalback');if(old)old.remove();const copy={Withdraw:'Choose a withdrawal destination and amount.',Send:'Enter a recipient wallet address to send assets.','Add Funds':'Choose a funding method for your wallet.'};const d=document.createElement('div');d.className='modalback';d.innerHTML='<div class="sheet"><h3>'+name+'</h3><p>'+(copy[name]||'Choose an available wallet action.')+'</p><div class="sheetrow"><button onclick="closeSheet()">Cancel</button><button class="primary" onclick="toast(\''+name+' flow ready\');closeSheet()">Continue</button></div></div>';d.onclick=e=>{if(e.target===d)closeSheet()};document.body.appendChild(d);}
+function closeSheet(){document.querySelector('.modalback')?.remove();}
+function openTrade(symbol){navigate('trade');const sel=document.querySelector('.bigselect');if(sel){let found=[...sel.options].find(o=>o.value===symbol);if(!found)sel.add(new Option(symbol,symbol));sel.value=symbol;}toast(symbol+' selected for trade');}
 function render(){
  document.getElementById('popular').innerHTML=assets.filter(a=>a.cat==='Crypto').slice(0,3).map(a=>
  '<div class="assetcard" data-symbol="'+a.s+'" onclick="openAsset(\''+a.s+'\')"><div class="assettop"><div class="coin">'+coin(a)+'</div><div><div class="assetname">'+a.n+'</div><div class="ticker">'+a.s+'</div></div><span class="badge">'+a.c+'</span></div><div class="assetprice">'+a.p+' USDT</div><div class="spark"></div></div>'
@@ -123,19 +131,27 @@ document.querySelectorAll('#tradeTabs button').forEach(btn=>btn.addEventListener
  document.getElementById('tradeControls').classList.toggle('hidden',chart);
  toast(chart?'Chart view':'AI powered Trade');
 }));
+const newsByTab={Crypto:['Bitcoin, Ethereum, XRP Pare Earlier Gains as Sentiment Turns Negative','Bitcoin, Ethereum or XRP: We Asked AI Models Which Gets Back to Its All-Time High First'],Business:['Markets digest new earnings and rate expectations','Global companies focus on growth as costs shift'],Global:['Global markets watch currency and commodity moves','Investors monitor major economic data releases'],Stocks:['Technology shares lead a mixed market session','Investors review the latest corporate guidance']};
 document.querySelectorAll('.chip').forEach(chip=>chip.addEventListener('click',()=>{
- document.querySelectorAll('.chip').forEach(x=>x.classList.remove('active'));
- chip.classList.add('active');toast(chip.textContent+' news');
+ document.querySelectorAll('.chip').forEach(x=>x.classList.remove('active'));chip.classList.add('active');
+ const items=document.querySelectorAll('.newsitem');const arr=newsByTab[chip.textContent]||newsByTab.Crypto;
+ items.forEach((el,i)=>{const h=el.querySelector('h3');if(h)h.textContent=arr[i%arr.length]});toast(chip.textContent+' news');
 }));
 document.querySelector('.eye')?.addEventListener('click',e=>{
  const amount=document.querySelector('.amount');
  amount.classList.toggle('hiddenBalance');
  e.target.textContent=amount.classList.contains('hiddenBalance')?'◌':'◉';
 });
+let sortAsc=false;
 document.querySelector('.sort b')?.addEventListener('click',()=>{
- const active=document.querySelector('#marketTabs .tab.active');
- toast('Sort options'); renderMarkets(active?active.dataset.marketTab:'Crypto');
+ const active=document.querySelector('#marketTabs .tab.active'); const cat=active?active.dataset.marketTab:'Crypto';
+ const q=(document.getElementById('search')?.value||'').trim().toLowerCase();
+ const data=assets.filter(a=>a.cat===cat && (a.n+' '+a.s).toLowerCase().includes(q));
+ data.sort((a,b)=>sortAsc?Number(a.p.replace(/,/g,''))-Number(b.p.replace(/,/g,'')):Number(b.p.replace(/,/g,''))-Number(a.p.replace(/,/g,'')));
+ document.getElementById('marketlist').innerHTML=data.length?data.map(marketRow).join(''):'<div class="empty">No markets found</div>';
+ sortAsc=!sortAsc;document.querySelector('.sort b').textContent=sortAsc?'Price ↑':'Price ↓';toast(sortAsc?'Lowest price first':'Highest price first');
 });
 render();
+loadState();
 </script>
 </body></html>
