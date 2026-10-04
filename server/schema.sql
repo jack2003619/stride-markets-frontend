@@ -13,6 +13,11 @@ on conflict(symbol) do update set price=excluded.price,change_pct=excluded.chang
 alter table users add column if not exists email text;
 alter table users add column if not exists password_hash text;
 alter table users add column if not exists role text not null default 'user';
+alter table users add column if not exists first_name text;
+alter table users add column if not exists last_name text;
+alter table users add column if not exists phone text;
+alter table users add column if not exists country text;
+alter table users add column if not exists date_of_birth text;
 alter table wallets add column if not exists asset text;
 create unique index if not exists wallets_user_asset_uq on wallets(user_id,asset);
 create table if not exists wallet_transactions(id bigserial primary key,user_id bigint references users(id) on delete cascade,type text not null,asset text not null,amount numeric(30,10) not null,network text,address text,tx_hash text,status text not null default 'PENDING',notes text,review_reason text,reviewed_by bigint references users(id),reviewed_at timestamptz,created_at timestamptz not null default now());
