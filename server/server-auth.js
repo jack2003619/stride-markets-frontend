@@ -15,11 +15,12 @@ function superadmin(req,res,next){if(req.user?.role!=="superadmin")return res.st
 app.get("/health",async(_req,res)=>{try{await pool.query("select 1");res.json({ok:true,mode:"simulation",database:"connected"})}catch{res.status(503).json({ok:false,mode:"simulation",database:"unavailable"})}});
 
 app.post("/api/auth/register",async(req,res)=>{
- const {displayName,email,password}=req.body||{};
+ const {displayName,email,password,firstName,lastName,phone,country,dateOfBirth}=req.body||{};
  if(!displayName?.trim()||!email?.trim()||!password||password.length<8)return res.status(400).json({error:"display_name_email_and_8_char_password_required"});
+ const safePhone=String(phone||"").trim().slice(0,40), safeCountry=String(country||"").trim().slice(0,80), safeDob=String(dateOfBirth||"").trim().slice(0,20), safeFirst=String(firstName||"").trim().slice(0,80), safeLast=String(lastName||"").trim().slice(0,80);
  try{const e=email.trim().toLowerCase();if((await pool.query("select 1 from users where email=$1",[e])).rowCount)return res.status(409).json({error:"email_already_registered"});
  const h=await bcrypt.hash(password,12);
- const {rows}=await pool.query("insert into users(display_name,email,password_hash,role) values($1,$2,$3,'user') returning id,display_name,email,role",[displayName.trim(),e,h]);
+ const {rows}=await pool.query("insert into users(display_name,email,password_hash,role,first_name,last_name,phone,country,date_of_birth) values($1,$2,$3,'user',$4,$5,$6,$7,$8) returning id,display_name,email,role,first_name,last_name,phone,country,date_of_birth",[displayName.trim(),e,h,safeFirst,safeLast,safePhone,safeCountry,safeDob||null]);
  await pool.query("insert into wallets(user_id,balance,asset) values($1,0,'USDT') on conflict(user_id,asset) do nothing",[rows[0].id]);
  await pool.query("insert into simulation_controls(user_id,mode,pnl_percent,enabled) values($1,'RANDOM',5,true) on conflict(user_id) do nothing",[rows[0].id]);
  res.status(201).json({user:rows[0],token:token(rows[0])});
@@ -35,7 +36,8 @@ app.post("/api/auth/login",async(req,res)=>{
 });
 app.get("/api/auth/me",auth,async(req,res)=>{const {rows}=await pool.query("select id,display_name,email,role,created_at from users where id=$1",[req.user.id]);res.json(rows[0]||null)});
 
-app.get("/api/profile",auth,async(req,res)=>{const {rows}=await pool.query("select id,display_name,email,role from users where id=$1",[req.user.id]);res.json(rows[0]||null)});
+app.get("/api/profile",auth,async(req,res)=>{const {rows}=await pool.query("select id,display_name,email,role,first_name,last_name,phone,country,date_of_birth,created_at from users where id=$1",[req.user.id]);res.json(rows[0]||null)});
+app.patch("/api/profile",auth,async(req,res)=>{const {displayName,firstName,lastName,phone,country,dateOfBirth}=req.body||{};try{const {rows}=await pool.query("update users set display_name=coalesce(nullif(trim($1),''),display_name),first_name=coalesce($2,first_name),last_name=coalesce($3,last_name),phone=coalesce($4,phone),country=coalesce($5,country),date_of_birth=coalesce(nullif($6,''),date_of_birth) where id=$7 returning id,display_name,email,role,first_name,last_name,phone,country,date_of_birth,created_at",[displayName,firstName,lastName,phone,country,dateOfBirth,req.user.id]);res.json(rows[0]||null)}catch(e){console.error(e);res.status(500).json({error:"database_error"})}});
 app.get("/api/wallet",auth,async(req,res)=>{const {rows}=await pool.query("select asset,balance,updated_at from wallets where user_id=$1 order by asset",[req.user.id]);res.json(rows)});
 app.get("/api/assets",async(_req,res)=>{const {rows}=await pool.query("select symbol,name,category,price,change_pct from assets where active=true order by symbol");res.json(rows)});
 
@@ -82,6 +84,11 @@ async function init(){
  if(!process.env.DATABASE_URL){console.warn("DATABASE_URL is not configured");return}
  await pool.query("alter table users add column if not exists password_hash text");
  await pool.query("alter table users add column if not exists role text not null default 'user'");
+ await pool.query("alter table users add column if not exists first_name text");
+ await pool.query("alter table users add column if not exists last_name text");
+ await pool.query("alter table users add column if not exists phone text");
+ await pool.query("alter table users add column if not exists country text");
+ await pool.query("alter table users add column if not exists date_of_birth text");
  await pool.query("alter table wallets add column if not exists asset text");
  await pool.query("update wallets set asset='USDT' where asset is null");
  await pool.query("create unique index if not exists wallets_user_asset_uq on wallets(user_id,asset)");
