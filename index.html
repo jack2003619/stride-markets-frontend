@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Stride Markets</title><meta name="theme-color" content="#100d1b"><meta name="description" content="Stride Markets simulation trading interface"><link rel="manifest" href="manifest.webmanifest">
+<title>Stride Markets</title><meta name="theme-color" content="#100d1b"><meta name="description" content="Stride Markets simulation trading interface"><link rel="manifest" href="manifest.webmanifest"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <style>
 :root{--bg:#100d1b;--bg2:#171329;--card:#1b1828;--card2:#211d31;--line:#302a40;--text:#f4f0fb;--muted:#9d98ad;--purple:#8b4dff;--purple2:#b56cff;--cyan:#27d8e7;--green:#00d49b;--red:#f28c9b}
 *{box-sizing:border-box}html,body{margin:0;background:#090811;color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}body{min-height:100vh;background:radial-gradient(circle at 50% -10%,#292044 0,#120f1e 38%,#0b0911 100%)}button,input{font:inherit;color:inherit}button{cursor:pointer}
@@ -148,4 +148,4 @@ async function verifyTxHash(hash){
   try{const r=await fetch(API_BASE+"/api/onchain/tx/"+encodeURIComponent(hash),{headers:authHeaders()});const d=await r.json();if(!r.ok)throw Error(d.error);toast((d.found?"Confirmed transaction":"Transaction not found")+" • "+d.confirmations+" confirmations");return d}catch(e){toast(e.message||"Verification unavailable")}
 }
 </script>
-</body></html>
+<button id="pwaInstall" style="position:fixed;right:18px;bottom:108px;z-index:45;border:1px solid #8d5cff;border-radius:24px;background:linear-gradient(100deg,#6f3bd5,#3b79ef);color:#fff;padding:12px 18px;font-weight:800;box-shadow:0 8px 24px rgba(93,56,190,.35)">⬇ Install App</button><script>(function(){const b=document.getElementById("pwaInstall");let p=null;window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();p=e;b.style.display="block"});b.onclick=async()=>{if(p){p.prompt();await p.userChoice;p=null}else{toast(/iphone|ipad|ipod/i.test(navigator.userAgent)?"Use Share → Add to Home Screen":"Use your browser menu → Install Stride Markets")}};window.addEventListener("appinstalled",()=>{b.textContent="✓ Installed"})})()</script></body></html>
