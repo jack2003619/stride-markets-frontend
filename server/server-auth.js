@@ -8,7 +8,7 @@ const {Pool}=pg, app=express();
 app.use(cors()); app.use(express.json());
 const pool=new Pool({connectionString:process.env.DATABASE_URL,ssl:process.env.NODE_ENV==="production"?{rejectUnauthorized:false}:false});
 const JWT_SECRET=process.env.JWT_SECRET;
-const token=(u)=>jwt.sign({sub:String(u.id),role:u.role,email:u.email},JWT_SECRET,{expiresIn:"7d"});
+const token=(u)=>{if(!JWT_SECRET)throw new Error("auth_not_configured");return jwt.sign({sub:String(u.id),role:u.role,email:u.email},JWT_SECRET,{expiresIn:"30d"})};
 function auth(req,res,next){if(!JWT_SECRET)return res.status(503).json({error:"auth_not_configured"});try{const t=(req.headers.authorization||"").replace(/^Bearer\s+/i,"");const p=jwt.verify(t,JWT_SECRET);req.user={id:Number(p.sub),role:p.role,email:p.email};next()}catch{res.status(401).json({error:"unauthorized"})}}
 function admin(req,res,next){if(!["admin","superadmin"].includes(req.user?.role))return res.status(403).json({error:"admin_only"});next()}
 function superadmin(req,res,next){if(req.user?.role!=="superadmin")return res.status(403).json({error:"superadmin_only"});next()}
@@ -30,10 +30,10 @@ app.post("/api/auth/register",async(req,res)=>{
 
 app.post("/api/auth/login",async(req,res)=>{
  const {email,password}=req.body||{};if(!email?.trim()||!password)return res.status(400).json({error:"email_and_password_required"});
- try{const {rows}=await pool.query("select id,display_name,email,role,password_hash from users where email=$1",[email.trim().toLowerCase()]);const u=rows[0];
+ try{if(!JWT_SECRET)return res.status(503).json({error:"auth_not_configured"});const e=email.trim().toLowerCase();const {rows}=await pool.query("select id,display_name,email,role,password_hash from users where lower(email)=lower($1)",[e]);const u=rows[0];
  if(!u||!(await bcrypt.compare(password,u.password_hash||"")))return res.status(401).json({error:"invalid_credentials"});
  const safe={id:u.id,display_name:u.display_name,email:u.email,role:u.role};res.json({user:safe,token:token(safe)});
- }catch{res.status(500).json({error:"database_error"})}
+ }catch(e){console.error("login_error",e);res.status(500).json({error:"database_error"})}
 });
 app.get("/api/auth/me",auth,async(req,res)=>{const {rows}=await pool.query("select id,display_name,email,role,created_at from users where id=$1",[req.user.id]);res.json(rows[0]||null)});
 
