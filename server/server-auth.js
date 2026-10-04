@@ -83,7 +83,7 @@ async function init(){
  await pool.query("alter table users add column if not exists password_hash text");
  await pool.query("alter table users add column if not exists role text not null default 'user'");
  await pool.query("alter table wallets add column if not exists asset text");
- await pool.query("update wallets set asset=coalesce(asset,currency,'USDT') where asset is null");
+ await pool.query("update wallets set asset='USDT' where asset is null");
  await pool.query("create unique index if not exists wallets_user_asset_uq on wallets(user_id,asset)");
  await pool.query("create table if not exists wallet_transactions(id bigserial primary key,user_id bigint references users(id) on delete cascade,type text not null,asset text not null,amount numeric(30,10) not null,network text,address text,tx_hash text,status text not null default 'PENDING',notes text,review_reason text,reviewed_by bigint references users(id),reviewed_at timestamptz,created_at timestamptz not null default now())");
  await pool.query("create table if not exists support_tickets(id bigserial primary key,user_id bigint references users(id) on delete cascade,subject text not null,message text not null,status text not null default 'OPEN',admin_response text,assigned_to bigint references users(id),created_at timestamptz not null default now(),updated_at timestamptz not null default now())");
