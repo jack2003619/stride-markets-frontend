@@ -43,6 +43,9 @@
 <nav class="bottom" id="bottomNav"><button type="button" class="navbtn active" data-page="home"><span class="navico">⌂</span><span>Home</span></button><button type="button" class="navbtn" data-page="markets"><span class="navico">▥</span><span>Markets</span></button><button type="button" class="navbtn" data-page="trade"><span class="navico">ϟ</span><span>Trade</span></button><button type="button" class="navbtn" data-page="invest"><span class="navico">⌁</span><span>Invest</span></button><button type="button" class="navbtn" data-page="wallet"><span class="navico">▣</span><span>Wallet</span></button><button type="button" class="navbtn" data-page="settings"><span class="navico">⚙</span><span>Settings</span></button></nav>
 </div><div id="toast" class="toast"></div>
 <script>
+const API_BASE="https://stride-markets-api-87lf.onrender.com";
+const STRIDE_TOKEN=localStorage.getItem("stride_token");
+const authHeaders=()=>({Authorization:"Bearer "+STRIDE_TOKEN});
 if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));}
 
 const assets=[
@@ -106,6 +109,7 @@ function bindStrideNavigation(){
     if(action && action.dataset.action){ e.preventDefault(); walletAction(action.dataset.action); }
   },true);
 }
+bindStrideNavigation();
 document.getElementById('bottomNav')?.addEventListener('click',e=>{const b=e.target.closest('.navbtn');if(!b)return;e.preventDefault();navigate(b.dataset.page)});
 document.querySelectorAll('#marketTabs .tab').forEach(b=>b.addEventListener('click',()=>{activeMarket=b.dataset.marketTab;document.querySelectorAll('#marketTabs .tab').forEach(x=>x.classList.toggle('active',x===b));document.getElementById('search').value='';renderMarkets();toast(activeMarket+' markets')}));
 document.getElementById('search')?.addEventListener('input',renderMarkets);document.getElementById('watchOnly')?.addEventListener('click',e=>{window.watchOnly=!window.watchOnly;e.currentTarget.textContent=window.watchOnly?'★ Showing watchlist':'☆ Watchlist only';e.currentTarget.classList.toggle('primary',window.watchOnly);renderMarkets()});
@@ -118,7 +122,7 @@ function addActivity(side,amount,symbol){const list=document.getElementById('act
 document.querySelectorAll('.buy,.sell').forEach(b=>b.addEventListener('click',()=>{const live=document.querySelector('#accountMode .active')?.dataset.mode==='LIVE';if(live){toast('Live execution is not enabled in this demo');return}const n=Number(document.querySelector('.amountinput')?.value||0);if(n<=0){toast('Enter a valid amount');return}const symbol=document.querySelector('.bigselect')?.value||'DEX';const side=b.classList.contains('buy')?'BUY':'SELL';addActivity(side,n,symbol);recordTrade(side,n,symbol);toast(side+' simulation recorded')}));
 window.strideConnected=localStorage.getItem('stride_connected')!=='false';const savedUser=JSON.parse(localStorage.getItem('stride_user')||'null');document.querySelector('.name').textContent=localStorage.getItem('stride_name')||savedUser?.display_name||'Your Account';window.historyFilter='ALL';document.querySelectorAll('[data-history-filter]').forEach(b=>b.addEventListener('click',()=>{window.historyFilter=b.dataset.historyFilter;document.querySelectorAll('[data-history-filter]').forEach(x=>x.classList.toggle('active',x===b));renderHistory()}));render();renderHistory();syncConnection();
 
-const liveBox=document.createElement("div");liveBox.id="strideLiveMarket";liveBox.className="stride-livebox";liveBox.innerHTML="<span class=\"muted\">Loading market feed…</span>";document.querySelector(".app")?.appendChild(liveBox);const API_BASE="https://stride-markets-api-87lf.onrender.com";const STRIDE_TOKEN=localStorage.getItem("stride_token");const authHeaders=()=>({Authorization:"Bearer "+STRIDE_TOKEN});function strideLogout(){localStorage.removeItem("stride_token");localStorage.removeItem("stride_user");location.href="./auth.html"}function openAdmin(){location.href="./admin.html"}
+const liveBox=document.createElement("div");liveBox.id="strideLiveMarket";liveBox.className="stride-livebox";liveBox.innerHTML="<span class=\"muted\">Loading market feed…</span>";document.querySelector(".app")?.appendChild(liveBox);function strideLogout(){localStorage.removeItem("stride_token");localStorage.removeItem("stride_user");location.href="./auth.html"}function openAdmin(){location.href="./admin.html"}
 async function apiLoad(){
   try{
     const [a,w,p]=await Promise.all([fetch(API_BASE+"/api/assets"),fetch(API_BASE+"/api/watchlist",{headers:authHeaders()}),fetch(API_BASE+"/api/profile",{headers:authHeaders()})]);
