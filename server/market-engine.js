@@ -20,7 +20,40 @@ export function mountMarketEngine(app, pool, auth) {
     }catch(e){res.status(503).json({error:"price_provider_unavailable"})}
   });
 
-  app.get("/api/market/orderbook/:symbol", async(req,res)=>{
+
+  // Public exchange market-data proxy. This is live market data only; execution remains
+  // behind the authenticated simulation/order engine until a compliant execution provider is configured.
+  app.get("/api/market/exchange-symbols", async (req,res)=>{
+    try{
+      const r=await fetch("https://api.binance.com/api/v3/exchangeInfo");
+      if(!r.ok) throw new Error("exchange_info_unavailable");
+      const d=await r.json();
+      const symbols=(d.symbols||[]).filter(x=>x.status==="TRADING"&&x.quoteAsset==="USDT").map(x=>({symbol:x.symbol,base:x.baseAsset,quote:x.quoteAsset}));
+      res.json({source:"Binance public market data",symbols,updated_at:new Date().toISOString()});
+    }catch(e){res.status(503).json({error:"exchange_info_unavailable"})}
+  });
+
+  app.get("/api/market/live-tickers", async (req,res)=>{
+    try{
+      const r=await fetch("https://api.binance.com/api/v3/ticker/24hr");
+      if(!r.ok) throw new Error("ticker_unavailable");
+      const d=await r.json();
+      const rows=(Array.isArray(d)?d:[]).filter(x=>/USDT$/.test(x.symbol)&&Number(x.lastPrice)>0).map(x=>({symbol:x.symbol,price:Number(x.lastPrice),change_pct:Number(x.priceChangePercent||0),volume:Number(x.volume||0),high:Number(x.highPrice||0),low:Number(x.lowPrice||0),quoteVolume:Number(x.quoteVolume||0)}));
+      res.json({source:"Binance public market data",rows,updated_at:new Date().toISOString()});
+    }catch(e){res.status(503).json({error:"ticker_unavailable"})}
+  });
+
+  app.get("/api/market/live-orderbook/:symbol", async (req,res)=>{
+    const symbol=String(req.params.symbol||"").toUpperCase();
+    if(!/^[A-Z0-9]{5,20}$/.test(symbol)) return res.status(400).json({error:"invalid_symbol"});
+    try{
+      const r=await fetch("https://api.binance.com/api/v3/depth?symbol="+encodeURIComponent(symbol)+"&limit=20");
+      if(!r.ok) throw new Error("orderbook_unavailable");
+      const d=await r.json();
+      res.json({source:"Binance public market data",symbol,bids:d.bids||[],asks:d.asks||[],lastUpdateId:d.lastUpdateId,updated_at:new Date().toISOString()});
+    }catch(e){res.status(503).json({error:"orderbook_unavailable"})}
+  });
+\n  app.get("/api/market/orderbook/:symbol", async(req,res)=>{
     const symbol=String(req.params.symbol||"").toUpperCase();
     if(!/^[A-Z0-9_-]{2,20}$/.test(symbol)) return res.status(400).json({error:"invalid_symbol"});
     try{
