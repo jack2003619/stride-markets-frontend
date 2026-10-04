@@ -94,5 +94,29 @@ document.querySelector('.eye')?.addEventListener('click',e=>{const a=document.qu
 function addActivity(side,amount,symbol){const list=document.getElementById('activityList');if(!list)return;const row=document.createElement('div');row.className='tx';row.innerHTML='<span>Simulated '+side+' • '+symbol+' • '+amount+' USDT</span><span class="muted">Just now</span>';list.prepend(row)}
 document.querySelectorAll('.buy,.sell').forEach(b=>b.addEventListener('click',()=>{const live=document.querySelector('#accountMode .active')?.dataset.mode==='LIVE';if(live){toast('Live execution is not enabled in this demo');return}const n=Number(document.querySelector('.amountinput')?.value||0);if(n<=0){toast('Enter a valid amount');return}const symbol=document.querySelector('.bigselect')?.value||'DEX';const side=b.classList.contains('buy')?'BUY':'SELL';addActivity(side,n,symbol);recordTrade(side,n,symbol);toast(side+' simulation recorded')}));
 window.strideConnected=localStorage.getItem('stride_connected')!=='false';document.querySelector('.name').textContent=localStorage.getItem('stride_name')||'Daniel';window.historyFilter='ALL';document.querySelectorAll('[data-history-filter]').forEach(b=>b.addEventListener('click',()=>{window.historyFilter=b.dataset.historyFilter;document.querySelectorAll('[data-history-filter]').forEach(x=>x.classList.toggle('active',x===b));renderHistory()}));render();renderHistory();syncConnection();
+
+const API_BASE="https://stride-markets-api-87lf.onrender.com";
+async function apiLoad(){
+  try{
+    const [a,w,p]=await Promise.all([fetch(API_BASE+"/api/assets"),fetch(API_BASE+"/api/watchlist"),fetch(API_BASE+"/api/profile")]);
+    if(a.ok){const rows=await a.json(); if(Array.isArray(rows)&&rows.length){assets.splice(0,assets.length,...rows.map(x=>({s:x.symbol,n:x.name,p:String(x.price),c:(Number(x.change_pct)>=0?"+":"")+Number(x.change_pct).toFixed(2)+"%",cat:x.category})));}}
+    if(w.ok){const rows=await w.json();localStorage.setItem("stride_watchlist",JSON.stringify(rows));}
+    if(p.ok){const profile=await p.json();if(profile?.display_name){document.querySelector(".name").textContent=profile.display_name;localStorage.setItem("stride_name",profile.display_name);}}
+    render();
+    toast("Stride Markets data connected");
+  }catch(e){console.warn("API unavailable; using demo fallback",e);}
+}
+const _toggleWatch=toggleWatch;
+toggleWatch=async function(s){
+  try{const r=await fetch(API_BASE+"/api/watchlist",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({symbol:s})});if(r.ok){const w=await r.json();localStorage.setItem("stride_watchlist",JSON.stringify(w));renderMarkets();toast(w.includes(s)?s+" added to watchlist":s+" removed from watchlist");return;}}catch(e){}
+  _toggleWatch(s);
+};
+const _recordTrade=recordTrade;
+recordTrade=async function(side,amount,symbol){
+  _recordTrade(side,amount,symbol);
+  try{await fetch(API_BASE+"/api/trades",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({side,amount:Number(amount),symbol})});}catch(e){console.warn("Trade sync unavailable",e);}
+};
+apiLoad();
+
 </script>
 </body></html>
