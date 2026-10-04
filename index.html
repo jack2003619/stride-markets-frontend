@@ -113,4 +113,39 @@ const _toggleWatch=toggleWatch;toggleWatch=async function(s){try{const r=await f
 const _recordTrade=recordTrade;recordTrade=async function(side,amount,symbol){_recordTrade(side,amount,symbol);try{const r=await fetch(API_BASE+"/api/trades",{method:"POST",headers:{"Content-Type":"application/json",...authHeaders()},body:JSON.stringify({side,amount:Number(amount),symbol})});if(r.ok)loadWalletSummary()}catch(e){console.warn("Trade sync unavailable",e)}};
 apiLoad();
 </script>
+<style>
+.stride-livebox{margin:12px 0;padding:14px;border:1px solid #332a42;border-radius:18px;background:rgba(18,14,28,.8)}
+.stride-livebox .mini{display:flex;gap:8px;overflow:auto}.stride-livebox button{white-space:nowrap}
+.stride-book{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}.stride-book>div{padding:10px;border:1px solid #2b2434;border-radius:12px}
+.stride-book .line{display:flex;justify-content:space-between;font-size:12px;padding:4px 0}
+</style>
+<script>
+async function loadLiveMarket(symbol="BTC"){
+  const box=document.getElementById("strideLiveMarket"); if(!box)return;
+  try{
+    const [pr,ob]=await Promise.all([
+      fetch(API_BASE+"/api/market/prices?symbols="+encodeURIComponent(symbol+",ETH,BNB,SOL,USDT")),
+      fetch(API_BASE+"/api/market/orderbook/"+encodeURIComponent(symbol))
+    ]);
+    if(!pr.ok||!ob.ok) throw Error();
+    const p=await pr.json(), b=await ob.json(), q=p.prices?.[symbol]||{};
+    box.innerHTML='<div><b>'+symbol+'</b> <span class="muted">+Number(q.usd||0).toLocaleString(undefined,{maximumFractionDigits:6})+'</span> <span class="pill">'+(Number(q.usd_24h_change||0).toFixed(2))+'%</span></div><div class="stride-book"><div><b>Bids</b>'+((b.bids||[]).slice(0,6).map(x=>'<div class="line"><span>'+Number(x.price).toLocaleString()+'</span><span>'+Number(x.quantity).toFixed(6)+'</span></div>').join('')||'<div class="muted">No bids</div>')+'</div><div><b>Asks</b>'+((b.asks||[]).slice(0,6).map(x=>'<div class="line"><span>'+Number(x.price).toLocaleString()+'</span><span>'+Number(x.quantity).toFixed(6)+'</span></div>').join('')||'<div class="muted">No asks</div>')+'</div></div>';
+  }catch{box.innerHTML='<span class="muted">Market feed unavailable. Demo market data remains available.</span>'}
+}
+async function submitMatchingOrder(side){
+  const symbol=(document.querySelector(".bigselect")?.value||"BTC").toUpperCase();
+  const amount=Number(document.querySelector(".amountinput")?.value||0);
+  const price=Number(document.querySelector("#orderPrice")?.value||0);
+  if(amount<=0)return toast("Enter a valid quantity");
+  try{
+    const r=await fetch(API_BASE+"/api/market/orders",{method:"POST",headers:{"Content-Type":"application/json",...authHeaders()},body:JSON.stringify({symbol,side,orderType:price>0?"LIMIT":"MARKET",price:price>0?price:undefined,quantity:amount})});
+    const d=await r.json(); if(!r.ok)throw Error(d.error||"Order rejected");
+    toast("Order accepted • matching engine");
+    loadLiveMarket(symbol);
+  }catch(e){toast(e.message||"Order failed")}
+}
+async function verifyTxHash(hash){
+  try{const r=await fetch(API_BASE+"/api/onchain/tx/"+encodeURIComponent(hash),{headers:authHeaders()});const d=await r.json();if(!r.ok)throw Error(d.error);toast((d.found?"Confirmed transaction":"Transaction not found")+" • "+d.confirmations+" confirmations");return d}catch(e){toast(e.message||"Verification unavailable")}
+}
+</script>
 </body></html>
