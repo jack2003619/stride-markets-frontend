@@ -283,14 +283,25 @@ async function verifyTxHash(hash){
   try{const r=await fetch(API_BASE+"/api/onchain/tx/"+encodeURIComponent(hash),{headers:authHeaders()});const d=await r.json();toast(d.found?"Confirmed transaction":"Transaction not found");return d;}
   catch(e){toast("Verification unavailable");}
 }
+let liveSocket=null,liveSocketSymbol="";
+function connectLiveTicker(symbol){
+ symbol=(symbol||"BTC").toUpperCase();if(liveSocketSymbol===symbol&&liveSocket&&liveSocket.readyState===1)return;
+ try{liveSocket?.close()}catch(e){} liveSocketSymbol=symbol;
+ try{
+  liveSocket=new WebSocket("wss://stream.binance.com:9443/ws/"+symbol.toLowerCase()+"usdt@ticker");
+  liveSocket.onopen=()=>{const s=document.getElementById("tradeFeedStatus");if(s){s.textContent="LIVE";s.style.color="#8de0c4"}};
+  liveSocket.onmessage=e=>{try{const d=JSON.parse(e.data),price=Number(d.c),pct=Number(d.P);if(!Number.isFinite(price))return;const q=document.getElementById("tradeQuote");if(q)q.textContent=symbol+" $"+price.toLocaleString(undefined,{maximumFractionDigits:8})+" • 24h "+(pct>=0?"+":"")+pct.toFixed(2)+"%";const title=document.getElementById("chartTitle");if(title)title.textContent=symbol+" / USDT • $"+price.toLocaleString(undefined,{maximumFractionDigits:8});const rows=liveRows||[];const hit=rows.find(x=>x.symbol===symbol+"USDT");if(hit){hit.price=price;hit.change_pct=pct}renderLiveMarkets();}catch{}};
+  liveSocket.onclose=()=>{if(liveSocketSymbol===symbol)setTimeout(()=>connectLiveTicker(symbol),1200)};
+  liveSocket.onerror=()=>{try{liveSocket.close()}catch(e){}};
+ }catch{}
+}
 async function startLiveFeed(){
-  await loadLiveMarket(document.querySelector(".bigselect")?.value||"BTC");
-  populateTradeAssets();
-  loadLiveChart(document.querySelector(".bigselect")?.value||"BTC");
-  document.querySelector(".bigselect")?.addEventListener("change",e=>{loadLiveMarket(e.target.value);loadLiveChart(e.target.value)});
+  const initial=document.querySelector(".bigselect")?.value||"BTC";
+  await loadLiveMarket(initial);populateTradeAssets();loadLiveChart(initial);connectLiveTicker(initial);
+  document.querySelector(".bigselect")?.addEventListener("change",e=>{const s=e.target.value;loadLiveMarket(s);loadLiveChart(s);connectLiveTicker(s)});
   document.getElementById("chartInterval")?.addEventListener("change",e=>loadLiveChart(document.querySelector(".bigselect")?.value||"BTC",e.target.value));
   document.getElementById("refreshChart")?.addEventListener("click",()=>loadLiveChart(document.querySelector(".bigselect")?.value||"BTC"));
-  clearInterval(liveTimer); liveTimer=setInterval(()=>{const s=document.querySelector(".bigselect")?.value||"BTC";loadLiveMarket(s);loadLiveChart(s)},5000);
+  clearInterval(liveTimer);liveTimer=setInterval(()=>{const s=document.querySelector(".bigselect")?.value||"BTC";loadLiveMarket(s);loadLiveChart(s)},5000);
 }
 startLiveFeed();</script>
 <button id="pwaInstall" style="position:fixed;right:18px;bottom:108px;z-index:45;border:1px solid #8d5cff;border-radius:24px;background:linear-gradient(100deg,#6f3bd5,#3b79ef);color:#fff;padding:12px 18px;font-weight:800;box-shadow:0 8px 24px rgba(93,56,190,.35)">⬇ Install App</button><script>(function(){const b=document.getElementById("pwaInstall");let p=null;window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();p=e;b.style.display="block"});b.onclick=async()=>{if(p){p.prompt();await p.userChoice;p=null}else{toast(/iphone|ipad|ipod/i.test(navigator.userAgent)?"Use Share → Add to Home Screen":"Use your browser menu → Install Stride Markets")}};window.addEventListener("appinstalled",()=>{b.textContent="✓ Installed"})})()</script></body></html>
