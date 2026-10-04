@@ -1,1 +1,1 @@
-{"name":"stride-markets-api","version":"1.1.0","private":true,"type":"module","scripts":{"start":"node server-auth.js"},"dependencies":{"express":"^5.1.0","pg":"^8.16.3","cors":"^2.8.5","bcryptjs":"^3.0.2","jsonwebtoken":"^9.0.2"}}
+{"name":"stride-markets-api","version":"1.2.0","private":true,"type":"module","scripts":{"start":"node server-auth.js"},"dependencies":{"express":"^5.1.0","pg":"^8.16.3","cors":"^2.8.5","bcryptjs":"^3.0.2","jsonwebtoken":"^9.0.2"}}
