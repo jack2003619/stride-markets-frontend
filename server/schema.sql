@@ -22,3 +22,41 @@ alter table wallets add column if not exists asset text;
 create unique index if not exists wallets_user_asset_uq on wallets(user_id,asset);
 create table if not exists wallet_transactions(id bigserial primary key,user_id bigint references users(id) on delete cascade,type text not null,asset text not null,amount numeric(30,10) not null,network text,address text,tx_hash text,status text not null default 'PENDING',notes text,review_reason text,reviewed_by bigint references users(id),reviewed_at timestamptz,created_at timestamptz not null default now());
 create table if not exists support_tickets(id bigserial primary key,user_id bigint references users(id) on delete cascade,subject text not null,message text not null,status text not null default 'OPEN',admin_response text,assigned_to bigint references users(id),created_at timestamptz not null default now(),updated_at timestamptz not null default now());
+
+CREATE TABLE IF NOT EXISTS market_orders (
+  id BIGSERIAL PRIMARY KEY,
+  user_id BIGINT REFERENCES users(id) ON DELETE CASCADE,
+  symbol TEXT NOT NULL,
+  side TEXT NOT NULL,
+  order_type TEXT NOT NULL,
+  price NUMERIC(30,10),
+  quantity NUMERIC(30,10) NOT NULL,
+  remaining_qty NUMERIC(30,10) NOT NULL,
+  status TEXT NOT NULL DEFAULT 'OPEN',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS market_orders_book_idx ON market_orders(symbol,side,status,price,created_at);
+CREATE TABLE IF NOT EXISTS market_fills (
+  id BIGSERIAL PRIMARY KEY,
+  buy_order_id BIGINT REFERENCES market_orders(id),
+  sell_order_id BIGINT REFERENCES market_orders(id),
+  symbol TEXT NOT NULL,
+  price NUMERIC(30,10) NOT NULL,
+  quantity NUMERIC(30,10) NOT NULL,
+  maker_order_id BIGINT REFERENCES market_orders(id),
+  taker_order_id BIGINT REFERENCES market_orders(id),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS market_ledger_events (
+  id BIGSERIAL PRIMARY KEY,
+  event_id UUID UNIQUE NOT NULL,
+  event_type TEXT NOT NULL,
+  reference_id BIGINT,
+  symbol TEXT,
+  quantity NUMERIC(30,10),
+  price NUMERIC(30,10),
+  metadata JSONB,
+  user_id BIGINT REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
