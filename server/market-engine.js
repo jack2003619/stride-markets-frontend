@@ -53,7 +53,8 @@ export function mountMarketEngine(app, pool, auth) {
       res.json({source:"Binance public market data",symbol,bids:d.bids||[],asks:d.asks||[],lastUpdateId:d.lastUpdateId,updated_at:new Date().toISOString()});
     }catch(e){res.status(503).json({error:"orderbook_unavailable"})}
   });
-\n  app.get("/api/market/orderbook/:symbol", async(req,res)=>{
+
+  app.get("/api/market/orderbook/:symbol", async(req,res)=>{
     const symbol=String(req.params.symbol||"").toUpperCase();
     if(!/^[A-Z0-9_-]{2,20}$/.test(symbol)) return res.status(400).json({error:"invalid_symbol"});
     try{
