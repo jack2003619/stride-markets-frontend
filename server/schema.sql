@@ -8,3 +8,12 @@ insert into users(display_name,vip_level) select 'Daniel',0 where not exists(sel
 insert into assets(symbol,name,category,price,change_pct) values
 ('DEX','Dex coin','Crypto',50.4319,1.11),('BTC','Bitcoin','Crypto',84842.10,-0.46),('ETH','Ethereum','Crypto',2681.34,-0.42),('USDT','Tether','Crypto',0.999890,0),('BNB','BNB','Crypto',779.72,0.74),('SOL','Solana','Crypto',202.10,1.23),('AAPL','Apple','Stocks',255.46,0.62),('TSLA','Tesla','Stocks',441.80,-0.31),('XAU','Gold','Commodities',3875.20,0.28),('XAG','Silver','Commodities',47.82,-0.12)
 on conflict(symbol) do update set price=excluded.price,change_pct=excluded.change_pct,name=excluded.name,category=excluded.category;
+
+-- Stride Markets wallet/admin simulation schema additions
+alter table users add column if not exists email text;
+alter table users add column if not exists password_hash text;
+alter table users add column if not exists role text not null default 'user';
+alter table wallets add column if not exists asset text;
+create unique index if not exists wallets_user_asset_uq on wallets(user_id,asset);
+create table if not exists wallet_transactions(id bigserial primary key,user_id bigint references users(id) on delete cascade,type text not null,asset text not null,amount numeric(30,10) not null,network text,address text,tx_hash text,status text not null default 'PENDING',notes text,review_reason text,reviewed_by bigint references users(id),reviewed_at timestamptz,created_at timestamptz not null default now());
+create table if not exists support_tickets(id bigserial primary key,user_id bigint references users(id) on delete cascade,subject text not null,message text not null,status text not null default 'OPEN',admin_response text,assigned_to bigint references users(id),created_at timestamptz not null default now(),updated_at timestamptz not null default now());
