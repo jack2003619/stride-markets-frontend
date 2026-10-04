@@ -1,0 +1,13 @@
+import express from "express";
+import cors from "cors";
+import pg from "pg";
+const {Pool}=pg;
+const app=express();
+app.use(cors());
+app.use(express.json());
+const pool=new Pool({connectionString:process.env.DATABASE_URL,ssl:process.env.NODE_ENV==="production"?{rejectUnauthorized:false}:false});
+app.get("/health",async(_req,res)=>{try{await pool.query("select 1");res.json({ok:true,service:"stride-markets-api",database:"connected",mode:"simulation"})}catch(e){res.status(503).json({ok:false,database:"unavailable"})}});
+app.get("/api/assets",async(_req,res)=>{try{const {rows}=await pool.query("select symbol,name,category,price,change_pct from assets where active=true order by symbol");res.json(rows)}catch(e){res.status(500).json({error:"database_error"})}});
+app.get("/api/trades",async(req,res)=>{try{const limit=Math.min(Number(req.query.limit)||50,100);const {rows}=await pool.query("select id,side,symbol,amount,created_at from trades order by created_at desc limit $1",[limit]);res.json(rows)}catch(e){res.status(500).json({error:"database_error"})}});
+app.post("/api/trades",async(req,res)=>{const {side,symbol,amount}=req.body;if(!["BUY","SELL"].includes(side)||!symbol||!Number.isFinite(Number(amount))||Number(amount)<=0)return res.status(400).json({error:"invalid_trade"});try{const {rows}=await pool.query("insert into trades(side,symbol,amount,mode) values($1,$2,$3,'SIMULATION') returning id,side,symbol,amount,created_at",[side,symbol,Number(amount)]);res.status(201).json(rows[0])}catch(e){res.status(500).json({error:"database_error"})}});
+const port=process.env.PORT||10000;app.listen(port,()=>console.log("Stride Markets API listening on "+port));
