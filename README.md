@@ -25,3 +25,6 @@ The current trading, balance, deposit, withdrawal, and wallet flows are simulati
 
 ## GitHub Pages
 A Pages workflow can be added once GitHub Pages is enabled for the repository's Actions deployment source.
+
+
+Pages deployment workflow updated: GitHub Pages enablement is handled by the workflow.
