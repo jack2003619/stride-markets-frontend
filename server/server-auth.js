@@ -10,7 +10,7 @@ const JWT_SECRET=process.env.JWT_SECRET;
 const token=(u)=>jwt.sign({sub:String(u.id),role:u.role,email:u.email},JWT_SECRET,{expiresIn:"7d"});
 function auth(req,res,next){if(!JWT_SECRET)return res.status(503).json({error:"auth_not_configured"});try{const t=(req.headers.authorization||"").replace(/^Bearer\s+/i,"");const p=jwt.verify(t,JWT_SECRET);req.user={id:Number(p.sub),role:p.role,email:p.email};next()}catch{res.status(401).json({error:"unauthorized"})}}
 function admin(req,res,next){if(!["admin","superadmin"].includes(req.user?.role))return res.status(403).json({error:"admin_only"});next()}
-function superadmin(req,res,next){if(req.user?.role!=="superadmin")return res.status(403).json({error:"superadmin_only"});next()});next()}
+function superadmin(req,res,next){if(req.user?.role!=="superadmin")return res.status(403).json({error:"superadmin_only"});next()}
 
 app.get("/health",async(_req,res)=>{try{await pool.query("select 1");res.json({ok:true,mode:"simulation",database:"connected"})}catch{res.status(503).json({ok:false,mode:"simulation",database:"unavailable"})}});
 
