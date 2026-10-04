@@ -143,37 +143,61 @@ if("serviceWorker" in navigator){navigator.serviceWorker.register("./sw.js").cat
 .stride-book .line{display:flex;justify-content:space-between;font-size:12px;padding:4px 0}
 </style>
 <script>let liveRows=[];let liveTimer=null;
+function shortSymbol(x){return String(x||"").replace(/USDT$/,"");}
 async function loadLiveMarket(symbol="BTC"){
   const box=document.getElementById("strideLiveMarket"),status=document.getElementById("tradeFeedStatus"),quote=document.getElementById("tradeQuote");
-  if(!box)return;
   try{
-    const r=await fetch(API_BASE+"/api/market/live-tickers"); if(!r.ok)throw Error();
-    const d=await r.json(); liveRows=d.rows||[];
-    const q=liveRows.find(x=>x.symbol===symbol.toUpperCase()+"USDT")||liveRows.find(x=>x.symbol===symbol.toUpperCase());
-    box.innerHTML='<div class="row"><b>LIVE EXCHANGE FEED</b><span class="live">CONNECTED</span></div><div class="mini">'+liveRows.slice(0,24).map(x=>'<button onclick="openTrade(&quot;'+x.symbol.replace(/USDT$/,'')+'&quot;)">'+x.symbol.replace(/USDT$/,'')+' </script>
-<button id="pwaInstall" style="position:fixed;right:18px;bottom:108px;z-index:45;border:1px solid #8d5cff;border-radius:24px;background:linear-gradient(100deg,#6f3bd5,#3b79ef);color:#fff;padding:12px 18px;font-weight:800;box-shadow:0 8px 24px rgba(93,56,190,.35)">⬇ Install App</button><script>(function(){const b=document.getElementById("pwaInstall");let p=null;window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();p=e;b.style.display="block"});b.onclick=async()=>{if(p){p.prompt();await p.userChoice;p=null}else{toast(/iphone|ipad|ipod/i.test(navigator.userAgent)?"Use Share → Add to Home Screen":"Use your browser menu → Install Stride Markets")}};window.addEventListener("appinstalled",()=>{b.textContent="✓ Installed"})})()</script></body></html>+Number(x.price).toLocaleString(undefined,{maximumFractionDigits:8})+'</button>').join('')+'</div>';
-    if(q){quote.textContent=q.symbol+' </script>
-<button id="pwaInstall" style="position:fixed;right:18px;bottom:108px;z-index:45;border:1px solid #8d5cff;border-radius:24px;background:linear-gradient(100deg,#6f3bd5,#3b79ef);color:#fff;padding:12px 18px;font-weight:800;box-shadow:0 8px 24px rgba(93,56,190,.35)">⬇ Install App</button><script>(function(){const b=document.getElementById("pwaInstall");let p=null;window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();p=e;b.style.display="block"});b.onclick=async()=>{if(p){p.prompt();await p.userChoice;p=null}else{toast(/iphone|ipad|ipod/i.test(navigator.userAgent)?"Use Share → Add to Home Screen":"Use your browser menu → Install Stride Markets")}};window.addEventListener("appinstalled",()=>{b.textContent="✓ Installed"})})()</script></body></html>+Number(q.price).toLocaleString(undefined,{maximumFractionDigits:8})+' • 24h '+(q.change_pct>=0?'+':'')+q.change_pct.toFixed(2)+'%';status.textContent='LIVE';status.style.color='#8de0c4';await loadLiveBook(q.symbol);}
+    const r=await fetch(API_BASE+"/api/market/live-tickers"); if(!r.ok) throw Error("feed");
+    const d=await r.json(); liveRows=Array.isArray(d.rows)?d.rows:[];
+    const wanted=String(symbol).toUpperCase()+"USDT";
+    const q=liveRows.find(x=>x.symbol===wanted)||liveRows[0];
+    if(box){
+      box.innerHTML='<div class="row"><b>LIVE EXCHANGE FEED</b><span class="live">CONNECTED</span></div><div class="mini">'+liveRows.slice(0,24).map(x=>'<button type="button" data-pair="'+shortSymbol(x.symbol)+'">'+shortSymbol(x.symbol)+' $'+Number(x.price).toLocaleString(undefined,{maximumFractionDigits:8})+'</button>').join("")+'</div>';
+      box.querySelectorAll("[data-pair]").forEach(btn=>btn.addEventListener("click",()=>openTrade(btn.dataset.pair)));
+    }
+    if(q){
+      if(quote) quote.textContent=q.symbol+" $"+Number(q.price).toLocaleString(undefined,{maximumFractionDigits:8})+" • 24h "+(Number(q.change_pct)>=0?"+":"")+Number(q.change_pct).toFixed(2)+"%";
+      if(status){status.textContent="LIVE";status.style.color="#8de0c4";}
+      await loadLiveBook(q.symbol);
+    }
     renderLiveMarkets();
-  }catch(e){box.innerHTML='<span class="muted">Live exchange feed unavailable — retrying automatically.</span>';if(status)status.textContent='RETRY';}
+  }catch(e){
+    if(box) box.innerHTML='<span class="muted">Live exchange feed unavailable — retrying automatically.</span>';
+    if(status) status.textContent="RETRY";
+  }
 }
 async function loadLiveBook(symbol){
   const el=document.getElementById("tradeOrderbook"); if(!el)return;
-  try{const r=await fetch(API_BASE+"/api/market/live-orderbook/"+encodeURIComponent(symbol));if(!r.ok)throw Error();const d=await r.json();const asks=(d.asks||[]).slice(0,8).reverse(),bids=(d.bids||[]).slice(0,8);
-    el.innerHTML='<div><b>ASKS</b>'+asks.map(x=>'<div class="line"><span>'+Number(x[0]).toLocaleString(undefined,{maximumFractionDigits:8})+'</span><span>'+Number(x[1]).toFixed(5)+'</span></div>').join('')+'</div><div><b>BIDS</b>'+bids.map(x=>'<div class="line"><span>'+Number(x[0]).toLocaleString(undefined,{maximumFractionDigits:8})+'</span><span>'+Number(x[1]).toFixed(5)+'</span></div>').join('')+'</div>';
+  try{
+    const r=await fetch(API_BASE+"/api/market/live-orderbook/"+encodeURIComponent(symbol)); if(!r.ok)throw Error("book");
+    const d=await r.json();
+    const asks=(d.asks||[]).slice(0,8).reverse(),bids=(d.bids||[]).slice(0,8);
+    el.innerHTML='<div><b>ASKS</b>'+asks.map(x=>'<div class="line"><span>'+Number(x[0]).toLocaleString(undefined,{maximumFractionDigits:8})+'</span><span>'+Number(x[1]).toFixed(5)+'</span></div>').join("")+'</div><div><b>BIDS</b>'+bids.map(x=>'<div class="line"><span>'+Number(x[0]).toLocaleString(undefined,{maximumFractionDigits:8})+'</span><span>'+Number(x[1]).toFixed(5)+'</span></div>').join("")+'</div>';
   }catch(e){el.innerHTML='<div class="empty">Order book unavailable</div>';}
 }
 function renderLiveMarkets(){
-  if(!liveRows.length)return;
-  const q=(document.getElementById('search')?.value||'').toUpperCase();
-  if(activeMarket!=='Crypto')return;
-  const watchOnly=window.watchOnly===true,watch=JSON.parse(localStorage.getItem('stride_watchlist')||'[]');
-  let rows=liveRows.filter(x=>x.symbol.endsWith('USDT')&&(!q||x.symbol.includes(q)||x.symbol.replace('USDT','').includes(q))&&(!watchOnly||watch.includes(x.symbol.replace('USDT','')))).slice(0,500);
-  document.getElementById('marketMeta').textContent='LIVE • '+rows.length+' USDT markets • exchange data';
-  document.getElementById('marketlist').innerHTML=rows.length?rows.map(x=>{const a={s:x.symbol.replace('USDT',''),n:x.symbol,p:Number(x.price).toLocaleString(undefined,{maximumFractionDigits:8}),c:(x.change_pct>=0?'+':'')+x.change_pct.toFixed(2)+'%',cat:'Crypto'};return marketRow(a)}).join(''):'<div class="empty">No live markets found</div>';
+  const list=document.getElementById("marketlist"),meta=document.getElementById("marketMeta");
+  if(!list||!liveRows.length||typeof activeMarket==="undefined"||activeMarket!=="Crypto")return;
+  const q=(document.getElementById("search")?.value||"").toUpperCase();
+  const rows=liveRows.filter(x=>x.symbol.endsWith("USDT")&&(!q||x.symbol.includes(q)||shortSymbol(x.symbol).includes(q))).slice(0,500);
+  if(meta)meta.textContent="LIVE • "+rows.length+" USDT markets • exchange data";
+  list.innerHTML=rows.length?rows.map(x=>marketRow({s:shortSymbol(x.symbol),n:x.symbol,p:Number(x.price).toLocaleString(undefined,{maximumFractionDigits:8}),c:(Number(x.change_pct)>=0?"+":"")+Number(x.change_pct).toFixed(2)+"%",cat:"Crypto"})).join(""):'<div class="empty">No live markets found</div>';
 }
-async function submitMatchingOrder(side){const symbol=(document.querySelector(".bigselect")?.value||"BTC").toUpperCase();const amount=Number(document.getElementById("tradeAmount")?.value||0);if(amount<=0)return toast("Enter a valid amount");const live=document.querySelector('#accountMode .active')?.dataset.mode==='LIVE';if(live)return toast("Live execution requires a configured exchange account/API and compliance checks");toast(side+" order recorded in simulation using live market data");}
-async function verifyTxHash(hash){try{const r=await fetch(API_BASE+"/api/onchain/tx/"+encodeURIComponent(hash),{headers:authHeaders()});const d=await r.json();toast(d.found?"Confirmed transaction":"Transaction not found");return d;}catch(e){toast("Verification unavailable");}}
-async function startLiveFeed(){await loadLiveMarket(document.querySelector(".bigselect")?.value||"BTC");clearInterval(liveTimer);liveTimer=setInterval(()=>loadLiveMarket(document.querySelector(".bigselect")?.value||"BTC"),5000);}
+async function submitMatchingOrder(side){
+  const symbol=(document.querySelector(".bigselect")?.value||"BTC").toUpperCase();
+  const amount=Number(document.querySelector(".amountinput")?.value||0);
+  if(amount<=0)return toast("Enter a valid amount");
+  const live=document.querySelector("#accountMode .active")?.dataset.mode==="LIVE";
+  if(live)return toast("Live execution requires a configured exchange account/API and compliance checks");
+  toast(side+" order recorded in simulation using live market data");
+}
+async function verifyTxHash(hash){
+  try{const r=await fetch(API_BASE+"/api/onchain/tx/"+encodeURIComponent(hash),{headers:authHeaders()});const d=await r.json();toast(d.found?"Confirmed transaction":"Transaction not found");return d;}
+  catch(e){toast("Verification unavailable");}
+}
+async function startLiveFeed(){
+  await loadLiveMarket(document.querySelector(".bigselect")?.value||"BTC");
+  clearInterval(liveTimer); liveTimer=setInterval(()=>loadLiveMarket(document.querySelector(".bigselect")?.value||"BTC"),5000);
+}
 startLiveFeed();</script>
 <button id="pwaInstall" style="position:fixed;right:18px;bottom:108px;z-index:45;border:1px solid #8d5cff;border-radius:24px;background:linear-gradient(100deg,#6f3bd5,#3b79ef);color:#fff;padding:12px 18px;font-weight:800;box-shadow:0 8px 24px rgba(93,56,190,.35)">⬇ Install App</button><script>(function(){const b=document.getElementById("pwaInstall");let p=null;window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();p=e;b.style.display="block"});b.onclick=async()=>{if(p){p.prompt();await p.userChoice;p=null}else{toast(/iphone|ipad|ipod/i.test(navigator.userAgent)?"Use Share → Add to Home Screen":"Use your browser menu → Install Stride Markets")}};window.addEventListener("appinstalled",()=>{b.textContent="✓ Installed"})})()</script></body></html>
