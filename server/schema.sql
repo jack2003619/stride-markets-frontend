@@ -1,0 +1,10 @@
+create table if not exists users(id bigserial primary key,display_name text not null default 'Daniel',vip_level integer not null default 0,created_at timestamptz not null default now());
+create table if not exists wallets(id bigserial primary key,user_id bigint references users(id),currency text not null default 'USDT',balance numeric(30,10) not null default 0,updated_at timestamptz not null default now());
+create table if not exists assets(symbol text primary key,name text not null,category text not null,price numeric(30,10) not null default 0,change_pct numeric(12,6) not null default 0,active boolean not null default true,updated_at timestamptz not null default now());
+create table if not exists trades(id bigserial primary key,user_id bigint references users(id),side text not null check(side in ('BUY','SELL')),symbol text not null references assets(symbol),amount numeric(30,10) not null check(amount>0),mode text not null default 'SIMULATION',created_at timestamptz not null default now());
+create table if not exists watchlist(user_id bigint references users(id),symbol text references assets(symbol),created_at timestamptz not null default now(),primary key(user_id,symbol));
+create table if not exists activities(id bigserial primary key,user_id bigint references users(id),type text not null,description text not null,created_at timestamptz not null default now());
+insert into users(display_name,vip_level) select 'Daniel',0 where not exists(select 1 from users);
+insert into assets(symbol,name,category,price,change_pct) values
+('DEX','Dex coin','Crypto',50.4319,1.11),('BTC','Bitcoin','Crypto',84842.10,-0.46),('ETH','Ethereum','Crypto',2681.34,-0.42),('USDT','Tether','Crypto',0.999890,0),('BNB','BNB','Crypto',779.72,0.74),('SOL','Solana','Crypto',202.10,1.23),('AAPL','Apple','Stocks',255.46,0.62),('TSLA','Tesla','Stocks',441.80,-0.31),('XAU','Gold','Commodities',3875.20,0.28),('XAG','Silver','Commodities',47.82,-0.12)
+on conflict(symbol) do update set price=excluded.price,change_pct=excluded.change_pct,name=excluded.name,category=excluded.category;
