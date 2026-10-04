@@ -146,13 +146,23 @@ if("serviceWorker" in navigator){navigator.serviceWorker.register("./sw.js").cat
 function shortSymbol(x){return String(x||"").replace(/USDT$/,"");}
 async function loadLiveMarket(symbol="BTC"){
   const box=document.getElementById("strideLiveMarket"),status=document.getElementById("tradeFeedStatus"),quote=document.getElementById("tradeQuote");
+  const backendUrl=API_BASE+"/api/market/live-tickers";
   try{
-    const r=await fetch(API_BASE+"/api/market/live-tickers"); if(!r.ok) throw Error("feed");
-    const d=await r.json(); liveRows=Array.isArray(d.rows)?d.rows:[];
-    const wanted=String(symbol).toUpperCase()+"USDT";
-    const q=liveRows.find(x=>x.symbol===wanted)||liveRows[0];
+    let rows=[];
+    try{
+      const r=await fetch(backendUrl,{cache:"no-store"}); if(r.ok){const d=await r.json(); rows=Array.isArray(d.rows)?d.rows:[];}
+    }catch(e){}
+    if(!rows.length){
+      const r=await fetch("https://data-api.binance.vision/api/v3/ticker/24hr",{cache:"no-store"});
+      if(!r.ok) throw Error("market feed");
+      const d=await r.json();
+      rows=d.filter(x=>String(x.symbol).endsWith("USDT")).map(x=>({symbol:x.symbol,price:Number(x.lastPrice),change_pct:Number(x.priceChangePercent),volume:Number(x.quoteVolume)}));
+    }
+    liveRows=rows;
+    const wanted=String(symbol).toUpperCase()+ "USDT";
+    const q=liveRows.find(x=>x.symbol===wanted)||liveRows.find(x=>x.symbol===String(symbol).toUpperCase())||liveRows[0];
     if(box){
-      box.innerHTML='<div class="row"><b>LIVE EXCHANGE FEED</b><span class="live">CONNECTED</span></div><div class="mini">'+liveRows.slice(0,24).map(x=>'<button type="button" data-pair="'+shortSymbol(x.symbol)+'">'+shortSymbol(x.symbol)+' $'+Number(x.price).toLocaleString(undefined,{maximumFractionDigits:8})+'</button>').join("")+'</div>';
+      box.innerHTML='<div class="row"><b>LIVE EXCHANGE FEED</b><span class="live">CONNECTED</span></div><div class="mini">'+liveRows.slice(0,40).map(x=>'<button type="button" data-pair="'+shortSymbol(x.symbol)+'">'+shortSymbol(x.symbol)+' $'+Number(x.price).toLocaleString(undefined,{maximumFractionDigits:8})+'</button>').join("")+'</div>';
       box.querySelectorAll("[data-pair]").forEach(btn=>btn.addEventListener("click",()=>openTrade(btn.dataset.pair)));
     }
     if(q){
@@ -162,18 +172,26 @@ async function loadLiveMarket(symbol="BTC"){
     }
     renderLiveMarkets();
   }catch(e){
-    if(box) box.innerHTML='<span class="muted">Live exchange feed unavailable — retrying automatically.</span>';
+    if(box) box.innerHTML='<span class="muted">Unable to connect to live market data. Retrying…</span>';
     if(status) status.textContent="RETRY";
+    console.warn("live market feed",e);
   }
 }
 async function loadLiveBook(symbol){
   const el=document.getElementById("tradeOrderbook"); if(!el)return;
   try{
-    const r=await fetch(API_BASE+"/api/market/live-orderbook/"+encodeURIComponent(symbol)); if(!r.ok)throw Error("book");
-    const d=await r.json();
-    const asks=(d.asks||[]).slice(0,8).reverse(),bids=(d.bids||[]).slice(0,8);
+    let d=null;
+    try{
+      const r=await fetch(API_BASE+"/api/market/live-orderbook/"+encodeURIComponent(symbol),{cache:"no-store"}); if(r.ok)d=await r.json();
+    }catch(e){}
+    if(!d){
+      const r=await fetch("https://data-api.binance.vision/api/v3/depth?symbol="+encodeURIComponent(symbol)+"&limit=20",{cache:"no-store"});
+      if(!r.ok)throw Error("order book");
+      d=await r.json();
+    }
+    const asks=(d.asks||[]).slice(0,10).reverse(),bids=(d.bids||[]).slice(0,10);
     el.innerHTML='<div><b>ASKS</b>'+asks.map(x=>'<div class="line"><span>'+Number(x[0]).toLocaleString(undefined,{maximumFractionDigits:8})+'</span><span>'+Number(x[1]).toFixed(5)+'</span></div>').join("")+'</div><div><b>BIDS</b>'+bids.map(x=>'<div class="line"><span>'+Number(x[0]).toLocaleString(undefined,{maximumFractionDigits:8})+'</span><span>'+Number(x[1]).toFixed(5)+'</span></div>').join("")+'</div>';
-  }catch(e){el.innerHTML='<div class="empty">Order book unavailable</div>';}
+  }catch(e){el.innerHTML='<div class="empty">Order book unavailable — retrying…</div>';console.warn("order book",e);}
 }
 function renderLiveMarkets(){
   const list=document.getElementById("marketlist"),meta=document.getElementById("marketMeta");
