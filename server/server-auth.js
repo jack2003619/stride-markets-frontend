@@ -71,6 +71,7 @@ async function init(){
  await pool.query("insert into users(id,display_name,email,role) values(1,'Demo User','demo@stride.local','user') on conflict(id) do nothing");
  await pool.query("insert into wallets(user_id,balance,asset) values(1,0,'USDT') on conflict(user_id,asset) do nothing");
  await pool.query("insert into simulation_controls(user_id,mode,pnl_percent,enabled) values(1,'RANDOM',5,true) on conflict(user_id) do nothing");
+ if(process.env.ADMIN_EMAIL&&process.env.ADMIN_PASSWORD){const h=await bcrypt.hash(process.env.ADMIN_PASSWORD,12);await pool.query("insert into users(display_name,email,password_hash,role) values('Stride Admin',$1,$2,'admin') on conflict(email) do update set password_hash=excluded.password_hash,role='admin'",[process.env.ADMIN_EMAIL.trim().toLowerCase(),h])}
 }
 const port=process.env.PORT||10000;
 init().then(()=>app.listen(port,()=>console.log("Stride Markets API listening on "+port))).catch(e=>{console.error(e);process.exit(1)});
