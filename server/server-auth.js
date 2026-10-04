@@ -46,16 +46,21 @@ app.get("/api/watchlist",auth,async(req,res)=>{const {rows}=await pool.query("se
 app.post("/api/watchlist",auth,async(req,res)=>{const {symbol}=req.body||{};if(!symbol)return res.status(400).json({error:"invalid_symbol"});const q=await pool.query("select 1 from watchlist where user_id=$1 and symbol=$2",[req.user.id,symbol]);if(q.rowCount)await pool.query("delete from watchlist where user_id=$1 and symbol=$2",[req.user.id,symbol]);else await pool.query("insert into watchlist(user_id,symbol) values($1,$2)",[req.user.id,symbol]);const {rows}=await pool.query("select symbol from watchlist where user_id=$1 order by created_at desc",[req.user.id]);res.json(rows.map(x=>x.symbol))});
 
 app.post("/api/trades",auth,async(req,res)=>{
- const {side,symbol,amount}=req.body||{};if(!["BUY","SELL"].includes(side)||!symbol||!Number.isFinite(Number(amount))||Number(amount)<=0)return res.status(400).json({error:"invalid_trade"});
- try{if(!(await pool.query("select 1 from assets where symbol=$1 and active=true",[symbol])).rowCount)return res.status(400).json({error:"invalid_asset"});
- const c=(await pool.query("select mode,pnl_percent,enabled from simulation_controls where user_id=$1",[req.user.id])).rows[0]||{mode:"RANDOM",pnl_percent:5,enabled:true};
- let p=0;if(c.enabled){if(c.mode==="PROFIT")p=Math.abs(Number(c.pnl_percent));else if(c.mode==="LOSS")p=-Math.abs(Number(c.pnl_percent));else p=Number(((Math.random()*2-1)*Math.abs(Number(c.pnl_percent||5))).toFixed(2))}
- const pnl=Number((Number(amount)*p/100).toFixed(8));
- const {rows}=await pool.query("insert into trades(user_id,side,symbol,amount,simulated_pnl,pnl_percent,mode) values($1,$2,$3,$4,$5,$6,'SIMULATION') returning id,side,symbol,amount,simulated_pnl,pnl_percent,mode,created_at",[req.user.id,side,symbol,Number(amount),pnl,p]);
- res.status(201).json(rows[0]);
- }catch(e){console.error(e);res.status(500).json({error:"database_error"})}
+ const {side,symbol,amount}=req.body||{}; const n=Number(amount);
+ if(!["BUY","SELL"].includes(side)||!symbol||!Number.isFinite(n)||n<=0)return res.status(400).json({error:"invalid_trade"});
+ try{
+  if(!(await pool.query("select 1 from assets where symbol=$1 and active=true",[symbol])).rowCount)return res.status(400).json({error:"invalid_asset"});
+  const bal=await pool.query("select balance from wallets where user_id=$1 and asset='USDT' for update");
+  const available=Number(bal.rows[0]?.balance||0);
+  if(available<=0||n>available)return res.status(400).json({error:"insufficient_balance"});
+  const c=(await pool.query("select mode,pnl_percent,enabled from simulation_controls where user_id=$1",[req.user.id])).rows[0]||{mode:"RANDOM",pnl_percent:5,enabled:true};
+  let p=0;if(c.enabled){if(c.mode==="PROFIT")p=Math.abs(Number(c.pnl_percent));else if(c.mode==="LOSS")p=-Math.abs(Number(c.pnl_percent));else p=Number(((Math.random()*2-1)*Math.abs(Number(c.pnl_percent||5))).toFixed(2))}
+  const pnl=Number((n*p/100).toFixed(8));
+  const {rows}=await pool.query("insert into trades(user_id,side,symbol,amount,simulated_pnl,pnl_percent,mode) values($1,$2,$3,$4,$5,$6,'ACCOUNT') returning id,side,symbol,amount,simulated_pnl,pnl_percent,mode,created_at",[req.user.id,side,symbol,n,pnl,p]);
+  await pool.query("update wallets set balance=balance-$1,updated_at=now() where user_id=$2 and asset='USDT'",[n,req.user.id]);
+  res.status(201).json(rows[0]);
+ }catch(e){console.error(e);res.status(500).json({error:e.message==="insufficient_balance"?"insufficient_balance":"database_error"})}
 });
-
 app.get("/api/admin/users",auth,admin,async(_req,res)=>{const {rows}=await pool.query("select u.id,u.display_name,u.email,u.role,coalesce(s.mode,'RANDOM') simulation_mode,coalesce(s.pnl_percent,0) simulation_pnl_percent,coalesce(s.enabled,true) simulation_enabled from users u left join simulation_controls s on s.user_id=u.id order by u.created_at desc");res.json(rows)});
 app.put("/api/admin/simulation-controls/:userId",auth,admin,async(req,res)=>{
  const id=Number(req.params.userId),{mode,pnlPercent,enabled}=req.body||{};
