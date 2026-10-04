@@ -96,6 +96,7 @@ async function init(){
  await pool.query("insert into simulation_controls(user_id,mode,pnl_percent,enabled) values(1,'RANDOM',5,true) on conflict(user_id) do nothing");
  await pool.query("select setval(pg_get_serial_sequence('users','id'), coalesce((select max(id) from users),1), true)");
  if(process.env.ADMIN_EMAIL&&process.env.ADMIN_PASSWORD){const h=await bcrypt.hash(process.env.ADMIN_PASSWORD,12);await pool.query("insert into users(display_name,email,password_hash,role) values('Stride Admin',$1,$2,'admin') on conflict(email) do update set password_hash=excluded.password_hash,role='admin'",[process.env.ADMIN_EMAIL.trim().toLowerCase(),h])}
+ if(process.env.SECADMIN_EMAIL&&process.env.SECADMIN_PASSWORD){const h=await bcrypt.hash(process.env.SECADMIN_PASSWORD,12);await pool.query("insert into users(display_name,email,password_hash,role) values('Stride Security Admin',$1,$2,'superadmin') on conflict(email) do update set password_hash=excluded.password_hash,role='superadmin'",[process.env.SECADMIN_EMAIL.trim().toLowerCase(),h])}
 }
 const port=process.env.PORT||10000;
 init().then(()=>app.listen(port,()=>console.log("Stride Markets API listening on "+port))).catch(e=>{console.error(e);process.exit(1)});
