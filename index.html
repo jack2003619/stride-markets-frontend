@@ -78,9 +78,165 @@ function toast(msg){const t=document.getElementById('toast');if(!t)return;t.text
 function openTrade(symbol){navigate('trade');const sel=document.querySelector('.bigselect');if(sel){if(![...sel.options].some(o=>o.value===symbol))sel.add(new Option(symbol,symbol));sel.value=symbol}loadLiveChart(symbol);toast(symbol+' selected')}
 async function loadWalletSummary(){try{const r=await fetch(API_BASE+"/api/wallet/summary",{headers:authHeaders()});if(!r.ok)return;const d=await r.json();const usdt=d.assets?.find(x=>x.asset==="USDT");const bal=Number(usdt?.balance||0).toFixed(2);document.querySelectorAll(".amount").forEach(x=>{if(x.textContent.includes("USDT")){const eye=x.querySelector(".eye");x.textContent=bal+" USDT ";if(eye)x.appendChild(eye)}});const act=document.getElementById("activityList");if(act&&d.transactions){act.innerHTML=d.transactions.slice(0,8).map(x=>'<div class="tx"><span>'+x.type+' • '+x.amount+' '+x.asset+'<br><small class="muted">'+(x.network||"")+'</small></span><span class="muted">'+x.status+'</span></div>').join("")||'<div class="empty">No wallet transactions</div>'}}catch(e){console.warn("Wallet summary unavailable",e)}}
 async function walletAction(name){if(window.strideConnected===false){toast('Connect wallet first');return}if(name==="Withdraw")return showCryptoSheet("Withdraw");if(name==="Add Funds")return showCryptoSheet("Deposit");if(name==="Send")return showCryptoSheet("Send");if(name==="Swap")return showCryptoSheet("Swap");showCryptoSheet(name)}
-async function showCryptoSheet(kind){document.querySelector('.modalback')?.remove();let opts={assets:["USDT","BTC","ETH","BNB","SOL"],usdtNetworks:["TRC20","ERC20","BEP20","POLYGON","SOLANA","ARBITRUM","OPTIMISM"]};try{const r=await fetch(API_BASE+"/api/crypto/options",{headers:authHeaders()});if(r.ok)opts=await r.json();}catch(e){}const d=document.createElement('div');d.className='modalback';const sheet=document.createElement('div');sheet.className='sheet';sheet.innerHTML='<h3>'+kind+'</h3>';const mk=(label,id,type)=>{const w=document.createElement('div');w.className='fieldrow';const l=document.createElement('label');l.textContent=label;const x=document.createElement(type==='select'?'select':'input');x.id=id;x.className=type==='select'?'select':'amountinput';if(type!=='select'){x.type=type;x.min='0';x.step='0.000001';x.placeholder='0.00';}w.append(l,x);sheet.appendChild(w);return x;};const asset=mk('Asset','cryptoAsset','select');opts.assets.forEach(x=>asset.add(new Option(x,x)));const net=mk('Network','cryptoNetwork','select');opts.usdtNetworks.forEach(x=>net.add(new Option(x,x)));mk('Amount','cryptoAmount','number');if(kind==='Withdraw')mk('Wallet address','cryptoAddress','text');if(kind==='Deposit')mk('Transaction hash (optional)','cryptoHash','text');const row=document.createElement('div');row.className='sheetrow';const cancel=document.createElement('button');cancel.textContent='Cancel';cancel.onclick=closeSheet;const submit=document.createElement('button');submit.className='primary';submit.textContent='Submit';submit.onclick=()=>submitCrypto(kind);row.append(cancel,submit);sheet.appendChild(row);const note=document.createElement('small');note.className='muted';note.textContent='Blockchain transfer requires a verified network connection.';sheet.appendChild(note);d.appendChild(sheet);d.onclick=e=>{if(e.target===d)closeSheet()};document.body.appendChild(d)}
-async function submitCrypto(kind){const asset=document.getElementById("cryptoAsset").value,network=document.getElementById("cryptoNetwork").value,amount=Number(document.getElementById("cryptoAmount").value);try{let path,body={asset,network,amount};if(kind==="Deposit"){path="/api/deposits";body.txHash=document.getElementById("cryptoHash").value}else if(kind==="Withdraw"){path="/api/withdrawals";body.address=document.getElementById("cryptoAddress").value}else{toast(kind+" is ready");closeSheet();return}const r=await fetch(API_BASE+path,{method:"POST",headers:{"Content-Type":"application/json",...authHeaders()},body:JSON.stringify(body)});const d=await r.json();if(!r.ok)throw Error(d.error);toast(kind+" submitted • "+d.transaction.status);closeSheet();loadWalletSummary()}catch(e){toast(e.message==="insufficient_balance"?"Insufficient balance":e.message==="unsupported_network"?"Unsupported network":"Unable to submit")}}
-function closeSheet(){document.querySelector('.modalback')?.remove()}
+async function showCryptoSheet(kind){document.querySelector('.modalback')?.remove();let opts={assets:["USDT","BTC","ETH","BNB","SOL"],networks:{USDT:["TRC20","ERC20","BEP20"],BTC:["BTC"],ETH:["ERC20"],BNB:["BEP20"],SOL:["SOLANA"]},addresses:{}};try{const r=await fetch(API_BASE+"/api/crypto/options",{headers:authHeaders()});if(r.ok)opts=await r.json()}catch(e){}
+const d=document.createElement('div');d.className='modalback';const sheet=document.createElement('div');sheet.className='sheet';sheet.innerHTML='<h3>'+kind+'</h3><p id="depositAddressNote" class="muted"></p>';
+const mk=(label,id,type)=>{const w=document.createElement('div');w.className='fieldrow';const l=document.createElement('label');l.textContent=label;const x=document.createElement(type==='select'?'select':'input');x.id=id;x.className=type==='select'?'select':'amountinput';if(type!=='select'){x.type=type;x.min='0';x.step='0.000001';x.placeholder='0.00';}w.append(l,x);sheet.appendChild(w);return x};
+const asset=mk('Asset','cryptoAsset','select');opts.assets.forEach(x=>asset.add(new Option(x,x)));
+const net=mk('Network','cryptoNetwork','select');
+const fillNetworks=()=>{net.innerHTML='';(opts.networks?.[asset.value]||[]).forEach(x=>net.add(new Option(x,x)));updateAddress()};
+const updateAddress=()=>{const note=document.getElementById('depositAddressNote');if(kind==='Deposit'){const key=asset.value+":"+net.value;note.innerHTML='<b>Deposit address</b><br><code style="word-break:break-all">'+(opts.addresses?.[key]||'Address unavailable')+'</code>'}else note.textContent=''};
+asset.addEventListener('change',fillNetworks);net.addEventListener('change',updateAddress);fillNetworks();
+mk('Amount','cryptoAmount','number');
+if(kind==='Withdraw')mk('Wallet address','cryptoAddress','text');
+if(kind==='Deposit'){mk('Transaction hash (optional)','cryptoHash','text');const w=document.createElement('div');w.className='fieldrow';const l=document.createElement('label');l.textContent='Payment screenshot / receipt';const file=document.createElement('input');file.id='cryptoReceipt';file.type='file';file.accept='image/*';file.className='amountinput';w.append(l,file);sheet.appendChild(w)}
+const row=document.createElement('div');row.className='sheetrow';const cancel=document.createElement('button');cancel.textContent='Cancel';cancel.onclick=closeSheet;const submit=document.createElement('button');submit.className='primary';submit.textContent='Submit';submit.onclick=()=>submitCrypto(kind);row.append(cancel,submit);sheet.appendChild(row);
+if(kind==='Deposit'){const note=document.createElement('small');note.className='muted';note.textContent='After submitting, the deposit and receipt are sent to admin review.';sheet.appendChild(note)}
+d.appendChild(sheet);d.onclick=e=>{if(e.target===d)closeSheet()};document.body.appendChild(d)}function closeSheet(){document.querySelector('.modalback')?.remove()}
+function openSupport(){document.querySelector('.modalback')?.remove();const d=document.createElement('div');d.className='modalback';d.innerHTML='<div class="sheet"><h3>Customer Service</h3><p>Send a support request to the Stride Markets admin team.</p><input id="supportSubject" class="amountinput" placeholder="Subject"><textarea id="supportMessage" class="amountinput" rows="5" style="width:100%;margin-top:10px" placeholder="Describe your question"></textarea><div class="sheetrow" style="margin-top:12px"><button onclick="closeSheet()">Cancel</button><button class="primary" onclick="submitSupport()">Send</button></div></div>';document.body.appendChild(d)}
+async function submitSupport(){const message=document.getElementById("supportMessage").value.trim();if(!message)return toast("Message required");try{const r=await fetch(API_BASE+"/api/support/tickets",{method:"POST",headers:{"Content-Type":"application/json",...authHeaders()},body:JSON.stringify({subject:document.getElementById("supportSubject").value||"General question",message})});if(!r.ok)throw Error();toast("Support ticket sent");closeSheet()}catch{toast("Support unavailable")}}
+function showProfile(){document.querySelector('.modalback')?.remove();const current=document.querySelector('.name')?.textContent||'Your Account';const d=document.createElement('div');d.className='modalback';d.innerHTML='<div class="sheet" role="dialog" aria-modal="true"><h3>Profile</h3><p>'+current+' • VIP 0<br><span class="muted">Account</span></p><div class="formlabel">Display name</div><input class="amountinput" value="'+current.replace(/"/g,'&quot;')+'" id="profileName"><div class="sheetrow" style="margin-top:14px"><button onclick="closeSheet()">Cancel</button><button class="primary" onclick="saveProfile()">Save</button></div></div>';d.onclick=e=>{if(e.target===d)closeSheet()};document.body.appendChild(d)}
+async function saveProfile(){const n=document.getElementById('profileName')?.value.trim()||'Your Account';document.querySelector('.name').textContent=n;localStorage.setItem('stride_name',n);try{await fetch(API_BASE+"/api/profile",{method:"PATCH",headers:{"Content-Type":"application/json",...authHeaders()},body:JSON.stringify({displayName:n})})}catch{}closeSheet();toast('Profile saved')}
+function togglePreference(b){b.textContent=b.textContent==='ON'?'OFF':'ON';b.classList.toggle('primary')}
+async function trade(side){const amount=Number(document.querySelector('#tradeControls .amountinput')?.value||0);const symbol=document.querySelector('.bigselect')?.value||'BTC';if(amount<=0)return toast('Enter a valid amount');const live=document.querySelector('#accountMode .active')?.dataset.mode==='LIVE';if(live)return toast('Live execution requires a configured exchange account/API');try{const r=await fetch(API_BASE+"/api/wallet/summary",{headers:authHeaders()});const d=await r.json();const usdt=Number(d.assets?.find(x=>x.asset==="USDT")?.balance||0);if(usdt<=0||amount>usdt)return toast('Insufficient balance');}catch{return toast('Unable to verify balance')}addActivity(side,amount,symbol);recordTrade(side,amount,symbol);toast(side+' order recorded')}
+function recordTrade(side,amount,symbol){const key='stride_history';const h=JSON.parse(localStorage.getItem(key)||'[]');h.unshift({side,amount,symbol,time:new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})});localStorage.setItem(key,JSON.stringify(h.slice(0,50)));renderHistory()}
+function renderHistory(){const list=document.getElementById('historyList');if(!list)return;const filter=window.historyFilter||'ALL';const h=JSON.parse(localStorage.getItem('stride_history')||'[]').filter(x=>filter==='ALL'||x.side===filter);list.innerHTML=h.length?h.map(x=>'<div class="tx"><span><b>'+x.side+'</b> • '+x.symbol+'<br><small class="muted">'+x.time+'</small></span><span>'+x.amount+' USDT</span></div>').join(''):'<div class="empty">No trades yet</div>'}
+function clearHistory(){localStorage.removeItem('stride_history');renderHistory();toast('History cleared')}
+
+function syncConnection(){const ok=window.strideConnected!==false;const b=document.querySelector('.connectstrip button');const t=document.getElementById('connectionText');const sub=document.getElementById('connectionSub');if(b)b.textContent=ok?'Connected':'Connect';if(t)t.textContent=ok?'Wallet connected':'Wallet disconnected';if(sub)sub.textContent=ok?'Account • ready to trade':'Connect a wallet to continue'}
+function toggleConnection(){window.strideConnected=window.strideConnected===false;localStorage.setItem('stride_connected',String(window.strideConnected));syncConnection();toast(window.strideConnected?'Wallet connected':'Wallet disconnected')}
+function bindStrideNavigation(){
+  const nav=document.getElementById('bottomNav');
+  if(nav){
+    nav.addEventListener('click',function(e){
+      const b=e.target.closest('.navbtn');
+      if(!b)return;
+      e.preventDefault();
+      e.stopPropagation();
+      navigate(b.dataset.page);
+    },true);
+  }
+  document.addEventListener('click',function(e){
+    const action=e.target.closest('.action');
+    if(action && action.dataset.action){ e.preventDefault(); walletAction(action.dataset.action); }
+  },true);
+}
+bindStrideNavigation();
+document.getElementById('bottomNav')?.addEventListener('click',e=>{const b=e.target.closest('.navbtn');if(!b)return;e.preventDefault();navigate(b.dataset.page)});
+document.querySelectorAll('#marketTabs .tab').forEach(b=>b.addEventListener('click',()=>{activeMarket=b.dataset.marketTab;document.querySelectorAll('#marketTabs .tab').forEach(x=>x.classList.toggle('active',x===b));document.getElementById('search').value='';renderMarkets();toast(activeMarket+' markets')}));
+document.getElementById('search')?.addEventListener('input',()=>{renderMarkets();renderLiveMarkets()});document.getElementById('watchOnly')?.addEventListener('click',e=>{window.watchOnly=!window.watchOnly;e.currentTarget.textContent=window.watchOnly?'★ Showing watchlist':'☆ Watchlist only';e.currentTarget.classList.toggle('primary',window.watchOnly);renderMarkets()});
+document.querySelector('.sort b')?.addEventListener('click',()=>{sortAsc=!sortAsc;document.querySelector('.sort b').textContent=sortAsc?'Price ↑':'Price ↓';renderMarkets();});
+document.querySelectorAll('.chip').forEach(chip=>chip.addEventListener('click',()=>{document.querySelectorAll('.chip').forEach(x=>x.classList.remove('active'));chip.classList.add('active');const arr=newsByTab[chip.textContent]||newsByTab.Crypto;document.querySelectorAll('.newsitem h3').forEach((h,i)=>h.textContent=arr[i%arr.length]);toast(chip.textContent+' news')}));
+document.querySelectorAll('#accountMode button').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('#accountMode button').forEach(x=>x.classList.remove('active'));b.classList.add('active');toast(b.dataset.mode==='LIVE'?'Live trading requires a connected execution service':'Account mode selected')}));
+document.querySelectorAll('#tradeTabs button').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('#tradeTabs button').forEach(x=>x.classList.remove('active'));b.classList.add('active');const chart=b.dataset.tradeTab==='chart';document.getElementById('tradeChart')?.classList.toggle('hidden',!chart);document.getElementById('tradeControls')?.classList.toggle('hidden',chart)}));
+document.querySelector('.eye')?.addEventListener('click',e=>{const a=document.querySelector('.balance .amount');a?.classList.toggle('hiddenBalance');e.currentTarget.textContent=a?.classList.contains('hiddenBalance')?'◌':'◉'});
+function addActivity(side,amount,symbol){const list=document.getElementById('activityList');if(!list)return;const row=document.createElement('div');row.className='tx';row.innerHTML='<span>Order '+side+' • '+symbol+' • '+amount+' USDT</span><span class="muted">Just now</span>';list.prepend(row)}
+document.querySelectorAll('.buy,.sell').forEach(b=>b.addEventListener('click',()=>trade(b.classList.contains('buy')?'BUY':'SELL')));
+window.strideConnected=localStorage.getItem('stride_connected')!=='false';const savedUser=JSON.parse(localStorage.getItem('stride_user')||'null');document.querySelector('.name').textContent=localStorage.getItem('stride_name')||savedUser?.display_name||'Your Account';window.historyFilter='ALL';document.querySelectorAll('[data-history-filter]').forEach(b=>b.addEventListener('click',()=>{window.historyFilter=b.dataset.historyFilter;document.querySelectorAll('[data-history-filter]').forEach(x=>x.classList.toggle('active',x===b));renderHistory()}));render();renderHistory();syncConnection();
+
+const liveBox=document.createElement("div");liveBox.id="strideLiveMarket";liveBox.className="stride-livebox";liveBox.innerHTML="<span class=\"muted\">Loading market feed…</span>";document.querySelector(".app")?.appendChild(liveBox);function strideLogout(){localStorage.removeItem("stride_token");localStorage.removeItem("stride_user");location.href="./auth.html"}function openAdmin(){location.href="./admin.html"}
+async function apiLoad(){
+  try{
+    const [a,w,p]=await Promise.all([fetch(API_BASE+"/api/assets"),fetch(API_BASE+"/api/watchlist",{headers:authHeaders()}),fetch(API_BASE+"/api/profile",{headers:authHeaders()})]);
+    if(a.ok){const rows=await a.json();if(Array.isArray(rows)&&rows.length){assets.splice(0,assets.length,...rows.map(x=>({s:x.symbol,n:x.name,p:String(x.price),c:(Number(x.change_pct)>=0?"+":"")+Number(x.change_pct).toFixed(2)+"%",cat:x.category})));}}
+    if(w.ok){const rows=await w.json();localStorage.setItem("stride_watchlist",JSON.stringify(rows));}
+    if(p.ok){const profile=await p.json();if(profile?.display_name){document.querySelector(".name").textContent=profile.display_name;localStorage.setItem("stride_name",profile.display_name);}}
+    render();loadWalletSummary();loadLiveMarket("BTC");toast("Stride Markets live data connected");
+  }catch(e){console.warn("API unavailable; using local fallback",e);}
+}
+const _toggleWatch=toggleWatch;toggleWatch=async function(s){try{const r=await fetch(API_BASE+"/api/watchlist",{method:"POST",headers:{"Content-Type":"application/json",...authHeaders()},body:JSON.stringify({symbol:s})});if(r.ok){const w=await r.json();localStorage.setItem("stride_watchlist",JSON.stringify(w));renderMarkets();toast(w.includes(s)?s+" added to watchlist":s+" removed from watchlist");return}}catch(e){} _toggleWatch(s)};
+const _recordTrade=recordTrade;recordTrade=async function(side,amount,symbol){_recordTrade(side,amount,symbol);try{const r=await fetch(API_BASE+"/api/trades",{method:"POST",headers:{"Content-Type":"application/json",...authHeaders()},body:JSON.stringify({side,amount:Number(amount),symbol})});if(r.ok)loadWalletSummary()}catch(e){console.warn("Trade sync unavailable",e)}};
+if("serviceWorker" in navigator){navigator.serviceWorker.register("./sw.js").catch(()=>{});}apiLoad();
+</script>
+<style>
+.stride-livebox{margin:12px 0;padding:14px;border:1px solid #332a42;border-radius:18px;background:rgba(18,14,28,.8)}
+.stride-livebox .mini{display:flex;gap:8px;overflow:auto}.stride-livebox button{white-space:nowrap}
+.stride-book{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}.stride-book>div{padding:10px;border:1px solid #2b2434;border-radius:12px}
+.stride-book .line{display:flex;justify-content:space-between;font-size:12px;padding:4px 0}
+</style>
+<script>let liveRows=[];let liveTimer=null;
+function populateTradeAssets(){const sel=document.querySelector(".bigselect");if(!sel)return;const current=sel.value||"BTC";const syms=[...new Set((liveRows||[]).map(x=>shortSymbol(x.symbol)).filter(Boolean))];if(syms.length){sel.innerHTML=syms.map(s=>'<option value="'+s+'">'+s+'</option>').join("");sel.value=syms.includes(current)?current:syms[0];}}
+async function loadLiveChart(symbol,interval){const svg=document.getElementById("liveChartLine"),meta=document.getElementById("chartMeta"),title=document.getElementById("chartTitle");if(!svg)return;symbol=(symbol||"BTC").toUpperCase();interval=interval||document.getElementById("chartInterval")?.value||"5m";title.textContent=symbol+" / USDT";try{const r=await fetch("https://data-api.binance.vision/api/v3/klines?symbol="+encodeURIComponent(symbol+"USDT")+"&interval="+encodeURIComponent(interval)+"&limit=80",{cache:"no-store"});if(!r.ok)throw Error("candles");const d=await r.json();const vals=d.map(x=>Number(x[4])).filter(Number.isFinite);if(!vals.length)throw Error("empty");const lo=Math.min(...vals),hi=Math.max(...vals),span=hi-lo||1;const pts=vals.map((v,i)=>((i/(vals.length-1))*700).toFixed(1)+","+((178-((v-lo)/span)*158)).toFixed(1)).join(" ");svg.setAttribute("points",pts);meta.textContent=interval+" • "+vals.length+" candles • last $"+vals.at(-1).toLocaleString(undefined,{maximumFractionDigits:8});document.getElementById("chartStatus").textContent="LIVE";}catch(e){meta.textContent="Chart data unavailable — retrying";document.getElementById("chartStatus").textContent="RETRY";}}
+function shortSymbol(x){return String(x||"").replace(/USDT$/,"");}
+async function loadLiveMarket(symbol="BTC"){
+  const box=document.getElementById("strideLiveMarket"),status=document.getElementById("tradeFeedStatus"),quote=document.getElementById("tradeQuote");
+  const backendUrl=API_BASE+"/api/market/live-tickers";
+  try{
+    let rows=[];
+    try{
+      const r=await fetch(backendUrl,{cache:"no-store"}); if(r.ok){const d=await r.json(); rows=Array.isArray(d.rows)?d.rows:[];}
+    }catch(e){}
+    if(!rows.length){
+      const r=await fetch("https://data-api.binance.vision/api/v3/ticker/24hr",{cache:"no-store"});
+      if(!r.ok) throw Error("market feed");
+      const d=await r.json();
+      rows=d.filter(x=>String(x.symbol).endsWith("USDT")).map(x=>({symbol:x.symbol,price:Number(x.lastPrice),change_pct:Number(x.priceChangePercent),volume:Number(x.quoteVolume)}));
+    }
+    liveRows=rows; populateTradeAssets();
+    const wanted=String(symbol).toUpperCase()+ "USDT";
+    const q=liveRows.find(x=>x.symbol===wanted)||liveRows.find(x=>x.symbol===String(symbol).toUpperCase())||liveRows[0];
+    if(box){
+      box.innerHTML='<div class="row"><b>LIVE EXCHANGE FEED</b><span class="live">CONNECTED</span></div><div class="mini">'+liveRows.slice(0,40).map(x=>'<button type="button" data-pair="'+shortSymbol(x.symbol)+'">'+shortSymbol(x.symbol)+' $'+Number(x.price).toLocaleString(undefined,{maximumFractionDigits:8})+'</button>').join("")+'</div>';
+      box.querySelectorAll("[data-pair]").forEach(btn=>btn.addEventListener("click",()=>openTrade(btn.dataset.pair)));
+    }
+    if(q){
+      if(quote) quote.textContent=q.symbol+" $"+Number(q.price).toLocaleString(undefined,{maximumFractionDigits:8})+" • 24h "+(Number(q.change_pct)>=0?"+":"")+Number(q.change_pct).toFixed(2)+"%";
+      if(status){status.textContent="LIVE";status.style.color="#8de0c4";}
+      await loadLiveBook(q.symbol);
+    }
+    renderLiveMarkets();
+  }catch(e){
+    if(box) box.innerHTML='<span class="muted">Unable to connect to live market data. Retrying…</span>';
+    if(status) status.textContent="RETRY";
+    console.warn("live market feed",e);
+  }
+}
+async function loadLiveBook(symbol){
+  const el=document.getElementById("tradeOrderbook"); if(!el)return;
+  try{
+    let d=null;
+    try{
+      const r=await fetch(API_BASE+"/api/market/live-orderbook/"+encodeURIComponent(symbol),{cache:"no-store"}); if(r.ok)d=await r.json();
+    }catch(e){}
+    if(!d){
+      const r=await fetch("https://data-api.binance.vision/api/v3/depth?symbol="+encodeURIComponent(symbol)+"&limit=20",{cache:"no-store"});
+      if(!r.ok)throw Error("order book");
+      d=await r.json();
+    }
+    const asks=(d.asks||[]).slice(0,10).reverse(),bids=(d.bids||[]).slice(0,10);
+    el.innerHTML='<div><b>ASKS</b>'+asks.map(x=>'<div class="line"><span>'+Number(x[0]).toLocaleString(undefined,{maximumFractionDigits:8})+'</span><span>'+Number(x[1]).toFixed(5)+'</span></div>').join("")+'</div><div><b>BIDS</b>'+bids.map(x=>'<div class="line"><span>'+Number(x[0]).toLocaleString(undefined,{maximumFractionDigits:8})+'</span><span>'+Number(x[1]).toFixed(5)+'</span></div>').join("")+'</div>';
+  }catch(e){el.innerHTML='<div class="empty">Order book unavailable — retrying…</div>';console.warn("order book",e);}
+}
+function renderLiveMarkets(){
+  const list=document.getElementById("marketlist"),meta=document.getElementById("marketMeta");
+  if(!list||!liveRows.length||typeof activeMarket==="undefined"||activeMarket!=="Crypto")return;
+  const q=(document.getElementById("search")?.value||"").toUpperCase();
+  const rows=liveRows.filter(x=>x.symbol.endsWith("USDT")&&(!q||x.symbol.includes(q)||shortSymbol(x.symbol).includes(q))).slice(0,500);
+  if(meta)meta.textContent="LIVE • "+rows.length+" USDT markets • exchange data";
+  list.innerHTML=rows.length?rows.map(x=>marketRow({s:shortSymbol(x.symbol),n:x.symbol,p:Number(x.price).toLocaleString(undefined,{maximumFractionDigits:8}),c:(Number(x.change_pct)>=0?"+":"")+Number(x.change_pct).toFixed(2)+"%",cat:"Crypto"})).join(""):'<div class="empty">No live markets found</div>';
+}
+async function submitMatchingOrder(side){
+  const symbol=(document.querySelector(".bigselect")?.value||"BTC").toUpperCase();
+  const amount=Number(document.querySelector(".amountinput")?.value||0);
+  if(amount<=0)return toast("Enter a valid amount");
+  const live=document.querySelector("#accountMode .active")?.dataset.mode==="LIVE";
+  if(live)return toast("Live execution requires a configured exchange account/API and compliance checks");
+  toast(side+" order recorded");
+}
+async function verifyTxHash(hash){
+  try{const r=await fetch(API_BASE+"/api/onchain/tx/"+encodeURIComponent(hash),{headers:authHeaders()});const d=await r.json();toast(d.found?"Confirmed transaction":"Transaction not found");return d;}
+  catch(e){toast("Verification unavailable");}
+}
+async function startLiveFeed(){
+  await loadLiveMarket(document.querySelector(".bigselect")?.value||"BTC");
+  populateTradeAssets();
+  loadLiveChart(document.querySelector(".bigselect")?.value||"BTC");
+  document.querySelector(".bigselect")?.addEventListener("change",e=>{loadLiveMarket(e.target.value);loadLiveChart(e.target.value)});
+  document.getElementById("chartInterval")?.addEventListener("change",e=>loadLiveChart(document.querySelector(".bigselect")?.value||"BTC",e.target.value));
+  document.getElementById("refreshChart")?.addEventListener("click",()=>loadLiveChart(document.querySelector(".bigselect")?.value||"BTC"));
+  clearInterval(liveTimer); liveTimer=setInterval(()=>{const s=document.querySelector(".bigselect")?.value||"BTC";loadLiveMarket(s);loadLiveChart(s)},5000);
+}
+startLiveFeed();</script>
+<button id="pwaInstall" style="position:fixed;right:18px;bottom:108px;z-index:45;border:1px solid #8d5cff;border-radius:24px;background:linear-gradient(100deg,#6f3bd5,#3b79ef);color:#fff;padding:12px 18px;font-weight:800;box-shadow:0 8px 24px rgba(93,56,190,.35)">⬇ Install App</button><script>(function(){const b=document.getElementById("pwaInstall");let p=null;window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();p=e;b.style.display="block"});b.onclick=async()=>{if(p){p.prompt();await p.userChoice;p=null}else{toast(/iphone|ipad|ipod/i.test(navigator.userAgent)?"Use Share → Add to Home Screen":"Use your browser menu → Install Stride Markets")}};window.addEventListener("appinstalled",()=>{b.textContent="✓ Installed"})})()</script></body></htmlasync function submitCrypto(kind){const asset=document.getElementById("cryptoAsset").value,network=document.getElementById("cryptoNetwork").value,amount=Number(document.getElementById("cryptoAmount").value);if(amount<=0)return toast("Enter a valid amount");try{let path,body={asset,network,amount};if(kind==="Deposit"){path="/api/deposits";body.txHash=document.getElementById("cryptoHash")?.value||"";const f=document.getElementById("cryptoReceipt")?.files?.[0];if(f){if(f.size>8*1024*1024)return toast("Image must be 8MB or smaller");body.receiptImage=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=reject;r.readAsDataURL(f)})}}else if(kind==="Withdraw"){path="/api/withdrawals";body.address=document.getElementById("cryptoAddress").value}else{toast(kind+" is ready");closeSheet();return}const r=await fetch(API_BASE+path,{method:"POST",headers:{"Content-Type":"application/json",...authHeaders()},body:JSON.stringify(body)});const d=await r.json();if(!r.ok)throw Error(d.error);toast(kind+" submitted • "+d.transaction.status);closeSheet();loadWalletSummary()}catch(e){toast(e.message==="insufficient_balance"?"Insufficient balance":e.message==="unsupported_network"?"Unsupported network":"Unable to submit")}}function closeSheet(){document.querySelector('.modalback')?.remove()}
 function openSupport(){document.querySelector('.modalback')?.remove();const d=document.createElement('div');d.className='modalback';d.innerHTML='<div class="sheet"><h3>Customer Service</h3><p>Send a support request to the Stride Markets admin team.</p><input id="supportSubject" class="amountinput" placeholder="Subject"><textarea id="supportMessage" class="amountinput" rows="5" style="width:100%;margin-top:10px" placeholder="Describe your question"></textarea><div class="sheetrow" style="margin-top:12px"><button onclick="closeSheet()">Cancel</button><button class="primary" onclick="submitSupport()">Send</button></div></div>';document.body.appendChild(d)}
 async function submitSupport(){const message=document.getElementById("supportMessage").value.trim();if(!message)return toast("Message required");try{const r=await fetch(API_BASE+"/api/support/tickets",{method:"POST",headers:{"Content-Type":"application/json",...authHeaders()},body:JSON.stringify({subject:document.getElementById("supportSubject").value||"General question",message})});if(!r.ok)throw Error();toast("Support ticket sent");closeSheet()}catch{toast("Support unavailable")}}
 function showProfile(){document.querySelector('.modalback')?.remove();const current=document.querySelector('.name')?.textContent||'Your Account';const d=document.createElement('div');d.className='modalback';d.innerHTML='<div class="sheet" role="dialog" aria-modal="true"><h3>Profile</h3><p>'+current+' • VIP 0<br><span class="muted">Account</span></p><div class="formlabel">Display name</div><input class="amountinput" value="'+current.replace(/"/g,'&quot;')+'" id="profileName"><div class="sheetrow" style="margin-top:14px"><button onclick="closeSheet()">Cancel</button><button class="primary" onclick="saveProfile()">Save</button></div></div>';d.onclick=e=>{if(e.target===d)closeSheet()};document.body.appendChild(d)}
