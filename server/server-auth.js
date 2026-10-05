@@ -23,7 +23,7 @@ app.post("/api/auth/register",async(req,res)=>{
  const h=await bcrypt.hash(password,12);
  const {rows}=await pool.query("insert into users(display_name,email,password_hash,role,first_name,last_name,phone,country,date_of_birth) values($1,$2,$3,'user',$4,$5,$6,$7,$8) returning id,display_name,email,role,first_name,last_name,phone,country,date_of_birth",[displayName.trim(),e,h,safeFirst,safeLast,safePhone,safeCountry,safeDob||null]);
  await pool.query("insert into wallets(user_id,balance,asset) values($1,0,'USDT') on conflict(user_id,asset) do nothing",[rows[0].id]);
- await pool.query("insert into simulation_controls(user_id,mode,pnl_percent,profit_percent,loss_percent,enabled) values($1,'RANDOM',5,5,5,true) on conflict(user_id) do nothing",[rows[0].id]);
+ await pool.query("insert into simulation_controls(user_id,mode,pnl_percent,enabled) values($1,'RANDOM',5,true) on conflict(user_id) do nothing",[rows[0].id]);
  res.status(201).json({user:rows[0],token:token(rows[0])});
  }catch(e){console.error(e);res.status(500).json({error:"database_error"})}
 });
@@ -48,34 +48,18 @@ app.post("/api/watchlist",auth,async(req,res)=>{const {symbol}=req.body||{};if(!
 app.post("/api/trades",auth,async(req,res)=>{
  const {side,symbol,amount}=req.body||{}; const n=Number(amount);
  if(!["BUY","SELL"].includes(side)||!symbol||!Number.isFinite(n)||n<=0)return res.status(400).json({error:"invalid_trade"});
- const client=await pool.connect();
  try{
-  await client.query("begin");
-  if(!(await client.query("select 1 from assets where symbol=$1 and active=true",[symbol])).rowCount){await client.query("rollback");return res.status(400).json({error:"invalid_asset"})}
-  const bal=await client.query("select balance from wallets where user_id=$1 and asset='USDT' for update",[req.user.id]);
+  if(!(await pool.query("select 1 from assets where symbol=$1 and active=true",[symbol])).rowCount)return res.status(400).json({error:"invalid_asset"});
+  const bal=await pool.query("select balance from wallets where user_id=$1 and asset='USDT' for update");
   const available=Number(bal.rows[0]?.balance||0);
-  if(available<=0||n>available){await client.query("rollback");return res.status(400).json({error:"insufficient_balance"})}
-  const c=(await client.query("select mode,coalesce(profit_percent,pnl_percent,5) profit_percent,coalesce(loss_percent,pnl_percent,5) loss_percent,enabled from simulation_controls where user_id=$1",[req.user.id])).rows[0]||{mode:"RANDOM",profit_percent:5,loss_percent:5,enabled:true};
-  const profitPct=Math.abs(Number(c.profit_percent||5)), lossPct=Math.abs(Number(c.loss_percent||5));
-  let p=0;
-  if(c.enabled){
-   if(c.mode==="BUY_PROFIT_SELL_LOSS")p=side==="BUY"?profitPct:-lossPct;
-   else if(c.mode==="BUY_LOSS_SELL_PROFIT")p=side==="BUY"?-lossPct:profitPct;
-   else if(c.mode==="BUY_PROFIT_SELL_PROFIT")p=profitPct;
-   else if(c.mode==="BUY_LOSS_SELL_LOSS")p=-lossPct;
-   else if(c.mode==="PROFIT")p=profitPct;
-   else if(c.mode==="LOSS")p=-lossPct;
-   else p=Number((Math.random()*(profitPct+lossPct)-lossPct).toFixed(4));
-  }
+  if(available<=0||n>available)return res.status(400).json({error:"insufficient_balance"});
+  const c=(await pool.query("select mode,pnl_percent,enabled from simulation_controls where user_id=$1",[req.user.id])).rows[0]||{mode:"RANDOM",pnl_percent:5,enabled:true};
+  let p=0;if(c.enabled){if(c.mode==="PROFIT")p=Math.abs(Number(c.pnl_percent));else if(c.mode==="LOSS")p=-Math.abs(Number(c.pnl_percent));else p=Number(((Math.random()*2-1)*Math.abs(Number(c.pnl_percent||5))).toFixed(2))}
   const pnl=Number((n*p/100).toFixed(8));
-  const outcome=pnl>0?"PROFIT":pnl<0?"LOSS":"FLAT";
-  if(pnl<0)await client.query("update wallets set balance=balance-$1,updated_at=now() where user_id=$2 and asset='USDT'",[n,req.user.id]);
-  else if(pnl>0)await client.query("update wallets set balance=balance+$1,updated_at=now() where user_id=$2 and asset='USDT'",[pnl,req.user.id]);
-  const {rows}=await client.query("insert into trades(user_id,side,symbol,amount,simulated_pnl,pnl_percent,mode,outcome) values($1,$2,$3,$4,$5,$6,'ACCOUNT',$7) returning id,side,symbol,amount,simulated_pnl,pnl_percent,mode,outcome,created_at",[req.user.id,side,symbol,n,pnl,p,outcome]);
-  await client.query("commit");
-  res.status(201).json({...rows[0],simulation_only:true});
- }catch(e){await client.query("rollback").catch(()=>{});console.error(e);res.status(500).json({error:e.message==="insufficient_balance"?"insufficient_balance":"database_error"})}
- finally{client.release()}
+  const {rows}=await pool.query("insert into trades(user_id,side,symbol,amount,simulated_pnl,pnl_percent,mode) values($1,$2,$3,$4,$5,$6,'ACCOUNT') returning id,side,symbol,amount,simulated_pnl,pnl_percent,mode,created_at",[req.user.id,side,symbol,n,pnl,p]);
+  await pool.query("update wallets set balance=balance-$1,updated_at=now() where user_id=$2 and asset='USDT'",[n,req.user.id]);
+  res.status(201).json(rows[0]);
+ }catch(e){console.error(e);res.status(500).json({error:e.message==="insufficient_balance"?"insufficient_balance":"database_error"})}
 });
 app.get("/api/admin/users",auth,admin,async(_req,res)=>{const {rows}=await pool.query("select u.id,u.display_name,u.email,u.role,coalesce(s.mode,'RANDOM') simulation_mode,coalesce(s.pnl_percent,0) simulation_pnl_percent,coalesce(s.enabled,true) simulation_enabled from users u left join simulation_controls s on s.user_id=u.id order by u.created_at desc");res.json(rows)});
 app.put("/api/admin/simulation-controls/:userId",auth,admin,async(req,res)=>{
@@ -96,8 +80,6 @@ app.get("/api/wallet/transactions",auth,async(req,res)=>{try{const {rows}=await 
 app.get("/api/wallet/summary",auth,async(req,res)=>{try{const a=await pool.query("select asset,balance,updated_at from wallets where user_id=$1 order by asset",[req.user.id]);const t=await pool.query("select id,type,asset,amount,status,network,address,tx_hash,notes,review_reason,reviewed_by,reviewed_at,created_at from wallet_transactions where user_id=$1 order by created_at desc limit 30",[req.user.id]);res.json({assets:a.rows,transactions:t.rows,simulation_only:true})}catch(e){console.error(e);res.status(500).json({error:"database_error"})}});
 app.get("/api/public/deposit-addresses",async(_req,res)=>{try{await pool.query("create table if not exists deposit_addresses(id bigserial primary key,asset text not null,network text not null,address text not null,active boolean not null default true,updated_at timestamptz not null default now(),unique(asset,network))");const q=await pool.query("select asset,network,address from deposit_addresses where active=true order by asset,network");const map={...FALLBACK_DEPOSIT_ADDRESSES};q.rows.forEach(x=>{map[x.asset+":"+x.network]=x.address});res.json({success:true,assets:SUPPORTED_CRYPTO,networks:NETWORKS_BY_ASSET,addresses:map,demo_mode:true})}catch(e){res.status(500).json({success:false,message:"database_error"})}});
 app.put("/api/internal/deposit-addresses",internalDepositAuth,async(req,res)=>{try{const body=req.body||{};const entries=Object.entries(body).map(([k,v])=>{const [asset,network]=String(k).split("-");return {asset,network,address:String(v||"").trim()}}).filter(x=>SUPPORTED_CRYPTO.includes(x.asset)&&NETWORKS_BY_ASSET[x.asset]?.includes(x.network)&&x.address);if(!entries.length)return res.status(400).json({success:false,message:"No valid addresses supplied"});for(const x of entries)await pool.query("insert into deposit_addresses(asset,network,address,active,updated_at) values($1,$2,$3,true,now()) on conflict(asset,network) do update set address=excluded.address,active=true,updated_at=now()",[x.asset,x.network,x.address]);res.json({success:true,addresses:Object.fromEntries(entries.map(x=>[x.asset+"-"+x.network,x.address]))})}catch(e){console.error(e);res.status(500).json({success:false,message:"database_error"})}});
-app.get("/api/internal/simulation-controls",internalDepositAuth,async(_req,res)=>{try{const {rows}=await pool.query("select u.id,u.display_name,u.email,u.role,coalesce(s.mode,'RANDOM') mode,coalesce(s.profit_percent,s.pnl_percent,5) profit_percent,coalesce(s.loss_percent,s.pnl_percent,5) loss_percent,coalesce(s.enabled,true) enabled from users u left join simulation_controls s on s.user_id=u.id order by u.created_at desc");res.json({success:true,users:rows})}catch(e){console.error(e);res.status(500).json({success:false,message:"database_error"})}});
-app.put("/api/internal/simulation-controls/:userId",internalDepositAuth,async(req,res)=>{const id=Number(req.params.userId),{mode,profitPercent,lossPercent,enabled}=req.body||{};const modes=["RANDOM","BUY_PROFIT_SELL_LOSS","BUY_LOSS_SELL_PROFIT","BUY_PROFIT_SELL_PROFIT","BUY_LOSS_SELL_LOSS"];if(!Number.isInteger(id)||!modes.includes(String(mode))||!Number.isFinite(Number(profitPercent))||!Number.isFinite(Number(lossPercent))||Number(profitPercent)<0||Number(profitPercent)>100||Number(lossPercent)<0||Number(lossPercent)>100||typeof enabled!=="boolean")return res.status(400).json({success:false,message:"Invalid simulation control"});try{const {rows}=await pool.query("insert into simulation_controls(user_id,mode,pnl_percent,profit_percent,loss_percent,enabled) values($1,$2,$3,$4,$5,$6) on conflict(user_id) do update set mode=excluded.mode,pnl_percent=excluded.pnl_percent,profit_percent=excluded.profit_percent,loss_percent=excluded.loss_percent,enabled=excluded.enabled,updated_at=now() returning user_id,mode,profit_percent,loss_percent,enabled",[id,String(mode),Number(profitPercent),Number(profitPercent),Number(lossPercent),enabled]);res.json({success:true,control:rows[0],simulation_only:true})}catch(e){console.error(e);res.status(500).json({success:false,message:"database_error"})}});
 app.get("/api/internal/deposits",internalDepositAuth,async(req,res)=>{try{await pool.query("alter table wallet_transactions add column if not exists receipt_image text");const q=await pool.query("select wt.id,wt.user_id,wt.type,wt.asset,wt.amount,wt.network,wt.address,wt.tx_hash,wt.status,wt.notes,wt.review_reason,wt.reviewed_by,wt.reviewed_at,wt.created_at,u.display_name,u.email from wallet_transactions wt join users u on u.id=wt.user_id where wt.type='DEPOSIT' order by wt.created_at desc limit 500");res.json({success:true,deposits:q.rows})}catch(e){console.error(e);res.status(500).json({success:false,message:"database_error"})}});
 app.get("/api/internal/deposits/:id",internalDepositAuth,async(req,res)=>{try{const q=await pool.query("select wt.*,u.display_name,u.email from wallet_transactions wt join users u on u.id=wt.user_id where wt.id=$1 and wt.type='DEPOSIT'",[Number(req.params.id)]);if(!q.rowCount)return res.status(404).json({success:false,message:"Deposit not found"});res.json({success:true,deposit:q.rows[0]})}catch(e){res.status(500).json({success:false,message:"database_error"})}});
 app.patch("/api/internal/deposits/:id",internalDepositAuth,async(req,res)=>{const id=Number(req.params.id),status=String(req.body?.status||"").toUpperCase(),reason=String(req.body?.reason||"").trim().slice(0,1000),reviewer=String(req.body?.reviewer||"admin").slice(0,120);if(!Number.isInteger(id)||!["ACCEPTED","REJECTED"].includes(status))return res.status(400).json({success:false,message:"Invalid review"});const client=await pool.connect();try{await client.query("begin");const x=await client.query("select * from wallet_transactions where id=$1 and type='DEPOSIT' for update",[id]);if(!x.rowCount){await client.query("rollback");return res.status(404).json({success:false,message:"Deposit not found"})}const tx=x.rows[0];if(tx.status!=="PENDING"){await client.query("rollback");return res.status(409).json({success:false,message:"Already reviewed"})}if(status==="ACCEPTED")await client.query("insert into wallets(user_id,asset,balance) values($1,$2,$3) on conflict(user_id,asset) do update set balance=wallets.balance+excluded.balance,updated_at=now()",[tx.user_id,tx.asset,tx.amount]);await client.query("update wallet_transactions set status=$1,review_reason=$2,notes=$3,reviewed_by=null,reviewed_at=now() where id=$4",[status,reason,status==="REJECTED"?(reason||"Deposit rejected"):"Deposit approved",id]);await client.query("commit");res.json({success:true,message:"Deposit reviewed",transaction:{...tx,status,review_reason:reason}})}catch(e){await client.query("rollback").catch(()=>{});console.error(e);res.status(500).json({success:false,message:"review_failed"})}finally{client.release()}});
@@ -151,9 +133,6 @@ async function init(){
  await pool.query("alter table trades add column if not exists user_id bigint references users(id) on delete cascade");
  await pool.query("alter table trades add column if not exists simulated_pnl numeric(30,10) not null default 0");
  await pool.query("alter table trades add column if not exists pnl_percent numeric(12,6) not null default 0");
- await pool.query("alter table trades add column if not exists outcome text");
- await pool.query("alter table simulation_controls add column if not exists profit_percent numeric(12,6) not null default 5");
- await pool.query("alter table simulation_controls add column if not exists loss_percent numeric(12,6) not null default 5");
  await pool.query("create table if not exists simulation_controls(user_id bigint primary key references users(id) on delete cascade,mode text not null default 'RANDOM',pnl_percent numeric(12,6) not null default 5,enabled boolean not null default true,updated_at timestamptz not null default now())");
  await pool.query("create table if not exists market_orders(id bigserial primary key,user_id bigint references users(id) on delete cascade,symbol text not null,side text not null,order_type text not null,price numeric(30,10),quantity numeric(30,10) not null,remaining_qty numeric(30,10) not null,status text not null default 'OPEN',created_at timestamptz not null default now(),updated_at timestamptz not null default now())");
  await pool.query("create index if not exists market_orders_book_idx on market_orders(symbol,side,status,price,created_at)");
