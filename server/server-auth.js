@@ -149,9 +149,9 @@ async function init(){
  await pool.query("alter table trades add column if not exists simulated_pnl numeric(30,10) not null default 0");
  await pool.query("alter table trades add column if not exists pnl_percent numeric(12,6) not null default 0");
  await pool.query("alter table trades add column if not exists outcome text");
+ await pool.query("create table if not exists simulation_controls(user_id bigint primary key references users(id) on delete cascade,mode text not null default 'RANDOM',pnl_percent numeric(12,6) not null default 5,enabled boolean not null default true,updated_at timestamptz not null default now())");
  await pool.query("alter table simulation_controls add column if not exists profit_percent numeric(12,6) not null default 5");
  await pool.query("alter table simulation_controls add column if not exists loss_percent numeric(12,6) not null default 5");
- await pool.query("create table if not exists simulation_controls(user_id bigint primary key references users(id) on delete cascade,mode text not null default 'RANDOM',pnl_percent numeric(12,6) not null default 5,enabled boolean not null default true,updated_at timestamptz not null default now())");
  await pool.query("create table if not exists market_orders(id bigserial primary key,user_id bigint references users(id) on delete cascade,symbol text not null,side text not null,order_type text not null,price numeric(30,10),quantity numeric(30,10) not null,remaining_qty numeric(30,10) not null,status text not null default 'OPEN',created_at timestamptz not null default now(),updated_at timestamptz not null default now())");
  await pool.query("create index if not exists market_orders_book_idx on market_orders(symbol,side,status,price,created_at)");
  await pool.query("create table if not exists market_fills(id bigserial primary key,buy_order_id bigint references market_orders(id),sell_order_id bigint references market_orders(id),symbol text not null,price numeric(30,10) not null,quantity numeric(30,10) not null,maker_order_id bigint references market_orders(id),taker_order_id bigint references market_orders(id),created_at timestamptz not null default now())");
