@@ -28,7 +28,6 @@
 <section class="connectstrip"><div><span class="dot"></span><b id="connectionText">Wallet connected</b><small id="connectionSub">Account • ready to trade</small></div><button class="outlinebtn smallbtn" onclick="toggleConnection()">Connected</button></section><section class="balance"><div class="eyebrow">TOTAL BALANCE</div><div class="amount">0.00 USDT <span class="eye">◉</span></div><div class="stats"><div class="stat">0.00 BTC</div><div class="stat active">↗ 0.00%</div></div></section>
 <div class="actions">
 <button type="button" class="action" data-action="Withdraw" onclick="walletAction('Withdraw')"><div class="ico">↥</div><span>Withdraw</span></button><button type="button" class="action" data-action="Send" onclick="walletAction('Send')"><div class="ico">◉</div><span>Send</span></button><button type="button" class="action" data-action="Add Funds" onclick="walletAction('Add Funds')"><div class="ico">⊕</div><span>Add Funds</span></button><button type="button" class="action" data-action="Swap" onclick="walletAction('Swap')"><div class="ico">⇄</div><span>Swap</span></button>
-</div><span>Withdraw</span></div><div class="action" onclick="walletAction('Send')"><div class="ico">◉</div><span>Send</span></div><div class="action" onclick="walletAction('Add Funds')"><div class="ico">⊕</div><span>Add Funds</span></div><div class="action" onclick="walletAction('Swap')"><div class="ico">⇄</div><span>Swap</span></div>
 </div>
 <div class="sectionhead"><h2>Popular Assets</h2><a onclick="navigate('markets')">View All</a></div>
 <div class="scroll" id="popular"></div>
@@ -295,61 +294,28 @@ async function startLiveFeed(){
 startLiveFeed();</script>
 <button id="pwaInstall" style="position:fixed;right:18px;bottom:108px;z-index:45;border:1px solid #8d5cff;border-radius:24px;background:linear-gradient(100deg,#6f3bd5,#3b79ef);color:#fff;padding:12px 18px;font-weight:800;box-shadow:0 8px 24px rgba(93,56,190,.35)">⬇ Install App</button><script>(function(){const b=document.getElementById("pwaInstall");let p=null;window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();p=e;b.style.display="block"});b.onclick=async()=>{if(p){p.prompt();await p.userChoice;p=null}else{toast(/iphone|ipad|ipod/i.test(navigator.userAgent)?"Use Share → Add to Home Screen":"Use your browser menu → Install Stride Markets")}};window.addEventListener("appinstalled",()=>{b.textContent="✓ Installed"})})()</script><script>(function(){const el=document.getElementById('exchangeFeeLive');const rate=document.getElementById('exchangeFeeRate');const st=document.getElementById('exchangeFeeStatus');async function refreshExchangeFee(){try{const r=await fetch('https://data-api.binance.vision/api/v3/exchangeInfo',{cache:'no-store'});if(!r.ok)throw Error();const d=await r.json();const sym=(d.symbols||[]).find(x=>x.symbol==='BTCUSDT');const f=sym?.filters?.find(x=>x.filterType==='NOTIONAL');rate.textContent='0.10%';el.textContent='LIVE';el.style.color='#8de0c4';st.textContent='Public exchange reference • '+(f?'BTC/USDT active':'spot market active');}catch(e){el.textContent='LIVE';st.textContent='Live reference unavailable — retrying';}}refreshExchangeFee();setInterval(refreshExchangeFee,10000)})();</script>
 <script>
-/* Stride resilient interaction layer: intentionally independent of the main UI script. */
+/* Stride click safety: bubble-phase only; never blocks native/inline handlers. */
 (function(){
   "use strict";
-  function byId(id){ return document.getElementById(id); }
-  function show(msg){
-    try{
-      if(typeof window.toast==="function") return window.toast(msg);
-      var t=byId("toast"); if(!t) return;
-      t.textContent=msg; t.classList.add("show");
-      clearTimeout(window.__strideFallbackToast);
-      window.__strideFallbackToast=setTimeout(function(){t.classList.remove("show")},2200);
-    }catch(_){}
-  }
   function nav(id){
-    var pages=document.querySelectorAll(".page");
-    var target=byId(id);
-    if(!target){ show("Page unavailable"); return; }
-    pages.forEach(function(p){p.classList.toggle("hidden",p.id!==id);});
+    var target=document.getElementById(id);
+    if(!target){ if(typeof window.toast==="function") window.toast("Page unavailable"); return; }
+    document.querySelectorAll(".page").forEach(function(p){p.classList.toggle("hidden",p!==target);});
     document.querySelectorAll(".navbtn").forEach(function(b){b.classList.toggle("active",b.getAttribute("data-page")===id);});
+    try{localStorage.setItem("stride_page",id)}catch(_){}
     window.scrollTo({top:0,behavior:"smooth"});
-    try{ localStorage.setItem("stride_page",id); }catch(_){}
   }
-  window.addEventListener("error",function(e){
-    console.error("Stride runtime error",e.error||e.message);
+  document.addEventListener("DOMContentLoaded",function(){
+    document.querySelectorAll(".navbtn").forEach(function(b){b.style.pointerEvents="auto";});
+    document.querySelectorAll("button,a,.action,.buy,.sell,.tab,.walletcard,.assetcard,.marketrow").forEach(function(el){el.style.pointerEvents="auto";});
+    var saved=null; try{saved=localStorage.getItem("stride_page")}catch(_){}
+    nav(saved && document.getElementById(saved) ? saved : "home");
   });
   document.addEventListener("click",function(e){
     var b=e.target.closest && e.target.closest(".navbtn");
-    if(b){
-      e.preventDefault(); e.stopPropagation();
+    if(b && !b.hasAttribute("onclick")){
       nav(b.getAttribute("data-page"));
-      return;
     }
-    var action=e.target.closest && e.target.closest(".action[data-action]");
-    if(action){
-      e.preventDefault(); e.stopPropagation();
-      var n=action.getAttribute("data-action");
-      if(typeof window.walletAction==="function") window.walletAction(n);
-      else if(typeof window.showCryptoSheet==="function") window.showCryptoSheet(n==="Withdraw"?"Withdraw":n==="Add Funds"?"Deposit":"Send");
-      else show(n+" is temporarily unavailable");
-      return;
-    }
-    var buy=e.target.closest && e.target.closest(".buy");
-    var sell=e.target.closest && e.target.closest(".sell");
-    if(buy||sell){
-      e.preventDefault(); e.stopPropagation();
-      if(typeof window.trade==="function") window.trade(buy?"BUY":"SELL"); else show("Trade is temporarily unavailable");
-      return;
-    }
-  },true);
-  document.addEventListener("DOMContentLoaded",function(){
-    var saved=null; try{saved=localStorage.getItem("stride_page")}catch(_){}
-    if(saved && byId(saved)) nav(saved);
-    else nav("home");
-    document.querySelectorAll(".navbtn").forEach(function(b){b.style.pointerEvents="auto";});
-    document.querySelectorAll(".action,.buy,.sell,.tab,.walletcard,.assetcard,.marketrow").forEach(function(b){b.style.pointerEvents="auto";});
   });
 })();
 </script>
