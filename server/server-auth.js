@@ -193,6 +193,33 @@ async function init(){
  if(process.env.ADMIN_EMAIL&&process.env.ADMIN_PASSWORD){const configured=process.env.ADMIN_EMAIL.trim().toLowerCase();const adminEmail=configured==="admin"?"admin@stride.local":configured;await pool.query("update users set email=$1 where lower(email)='admin' and not exists(select 1 from users where lower(email)=$1)",[adminEmail]);const h=await bcrypt.hash(process.env.ADMIN_PASSWORD,12);await pool.query("insert into users(display_name,email,password_hash,role) values('Stride Admin',$1,$2,'admin') on conflict(email) do update set password_hash=excluded.password_hash,role='admin'",[adminEmail,h])}
  if(process.env.SECADMIN_EMAIL&&process.env.SECADMIN_PASSWORD){const h=await bcrypt.hash(process.env.SECADMIN_PASSWORD,12);await pool.query("insert into users(display_name,email,password_hash,role) values('Stride Security Admin',$1,$2,'superadmin') on conflict(email) do update set password_hash=excluded.password_hash,role='superadmin'",[process.env.SECADMIN_EMAIL.trim().toLowerCase(),h])}
 }
+async function autoSettleExpiredTrades(){
+  const client=await pool.connect();
+  try{
+    await client.query("begin");
+    const q=await client.query("select t.*,coalesce(s.profit_percent,s.pnl_percent,5) profit_percent,coalesce(s.loss_percent,s.pnl_percent,5) loss_percent,s.mode as current_mode,s.enabled from trades t left join simulation_controls s on s.user_id=t.user_id where t.status='OPEN' and t.expires_at is not null and t.expires_at<=now() for update skip locked limit 100");
+    for(const t of q.rows){
+      const pp=Math.abs(Number(t.profit_percent||5)),lp=Math.abs(Number(t.loss_percent||5)); let p=0;
+      const mode=String(t.current_mode||t.mode||"RANDOM");
+      if(t.enabled!==false){
+        if(mode==="BUY_PROFIT_SELL_LOSS")p=t.side==="BUY"?pp:-lp;
+        else if(mode==="BUY_LOSS_SELL_PROFIT")p=t.side==="BUY"?-lp:pp;
+        else if(mode==="BUY_PROFIT_SELL_PROFIT")p=pp;
+        else if(mode==="BUY_LOSS_SELL_LOSS")p=-lp;
+        else if(mode==="PROFIT")p=pp;
+        else if(mode==="LOSS")p=-lp;
+        else p=Number((Math.random()*(pp+lp)-lp).toFixed(4));
+      }
+      const pnl=Number((Number(t.amount)*p/100).toFixed(8));
+      const outcome=pnl>0?"PROFIT":pnl<0?"LOSS":"FLAT";
+      await client.query("update wallets set reserved_balance=greatest(0,coalesce(reserved_balance,0)-$1),balance=balance+$1+$2,updated_at=now() where user_id=$3 and asset='USDT'",[Number(t.amount),pnl,t.user_id]);
+      await client.query("update trades set simulated_pnl=$1,pnl_percent=$2,mode=$3,outcome=$4,status='SETTLED',settled_at=now() where id=$5 and status='OPEN'",[pnl,p,mode,outcome,t.id]);
+    }
+    await client.query("commit");
+  }catch(e){await client.query("rollback").catch(()=>{});console.error("auto_settle_error",e)}
+  finally{client.release()}
+}
+setInterval(autoSettleExpiredTrades,1000);
 mountMarketEngine(app,pool,auth);
 const port=process.env.PORT||10000;
 init().then(()=>app.listen(port,()=>console.log("Stride Markets API listening on "+port))).catch(e=>{console.error(e);process.exit(1)});
