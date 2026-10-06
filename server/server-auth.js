@@ -62,7 +62,7 @@ app.post("/api/trades",auth,async(req,res)=>{
   const c=(await client.query("select mode,coalesce(profit_percent,pnl_percent,5) profit_percent,coalesce(loss_percent,pnl_percent,5) loss_percent,enabled from simulation_controls where user_id=$1",[req.user.id])).rows[0]||{mode:"RANDOM",profit_percent:5,loss_percent:5,enabled:true};
   const expiresAt=new Date(Date.now()+Math.round(dur*1000));
   const {rows}=await client.query("insert into trades(user_id,side,symbol,amount,simulated_pnl,pnl_percent,mode,outcome,status,duration_seconds,entry_price,expires_at) values($1,$2,$3,$4,0,0,$5,'PENDING','OPEN',$6,$7,$8) returning id,side,symbol,amount,simulated_pnl,pnl_percent,mode,outcome,status,duration_seconds,entry_price,expires_at,created_at",[req.user.id,side,assetSymbol,n,String(c.mode),Math.round(dur),Number.isFinite(ep)&&ep>0?ep:null,expiresAt]);
-  await client.query("update wallets set reserved_balance=coalesce(reserved_balance,0)+$1,updated_at=now() where user_id=$2 and asset='USDT'",[n,req.user.id]);
+  await client.query("update wallets set balance=balance-$1,reserved_balance=coalesce(reserved_balance,0)+$1,updated_at=now() where user_id=$2 and asset='USDT'",[n,req.user.id]);
   await client.query("commit");
   res.status(201).json({...rows[0],simulation_only:true,available_balance:available-n});
  }catch(e){await client.query("rollback").catch(()=>{});console.error(e);res.status(500).json({error:"database_error"})}finally{client.release()}
@@ -83,7 +83,7 @@ app.post("/api/trades/:id/settle",auth,async(req,res)=>{
   const pp=Math.abs(Number(t.profit_percent||5)),lp=Math.abs(Number(t.loss_percent||5));let p=0;const mode=String(t.current_mode||t.mode||"RANDOM");
   if(t.enabled!==false){if(mode==="BUY_PROFIT_SELL_LOSS")p=t.side==="BUY"?pp:-lp;else if(mode==="BUY_LOSS_SELL_PROFIT")p=t.side==="BUY"?-lp:pp;else if(mode==="BUY_PROFIT_SELL_PROFIT")p=pp;else if(mode==="BUY_LOSS_SELL_LOSS")p=-lp;else if(mode==="PROFIT")p=pp;else if(mode==="LOSS")p=-lp;else p=Number((Math.random()*(pp+lp)-lp).toFixed(4))}
   const pnl=Number((Number(t.amount)*p/100).toFixed(8)), outcome=pnl>0?"PROFIT":pnl<0?"LOSS":"FLAT";
-  await client.query("update wallets set reserved_balance=greatest(0,coalesce(reserved_balance,0)-$1),balance=balance+$2,updated_at=now() where user_id=$3 and asset='USDT'",[Number(t.amount),pnl,req.user.id]);
+  await client.query("update wallets set reserved_balance=greatest(0,coalesce(reserved_balance,0)-$1),balance=balance+$1+$2,updated_at=now() where user_id=$3 and asset='USDT'",[Number(t.amount),pnl,req.user.id]);
   const {rows}=await client.query("update trades set simulated_pnl=$1,pnl_percent=$2,mode=$3,outcome=$4,status='SETTLED',settled_at=now() where id=$5 returning id,side,symbol,amount,simulated_pnl,pnl_percent,mode,outcome,status,duration_seconds,entry_price,expires_at,created_at,settled_at",[pnl,p,mode,outcome,id]);
   await client.query("commit");res.json({...rows[0],simulation_only:true});
  }catch(e){await client.query("rollback").catch(()=>{});console.error(e);res.status(500).json({error:"settlement_failed"})}finally{client.release()}
