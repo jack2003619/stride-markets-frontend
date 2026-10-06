@@ -29,8 +29,8 @@ app.post("/api/auth/register",async(req,res)=>{
 });
 
 app.post("/api/auth/login",async(req,res)=>{
- const {email,password}=req.body||{};if(!email?.trim()||!password)return res.status(400).json({error:"email_and_password_required"});
- try{if(!JWT_SECRET)return res.status(503).json({error:"auth_not_configured"});const e=email.trim().toLowerCase();const {rows}=await pool.query("select id,display_name,email,role,password_hash from users where lower(email)=lower($1)",[e]);const u=rows[0];
+ const {email,username,password}=req.body||{};const rawIdentifier=String(email??username??"").trim();if(!rawIdentifier||!password)return res.status(400).json({error:"email_and_password_required"});
+ try{if(!JWT_SECRET)return res.status(503).json({error:"auth_not_configured"});const e=rawIdentifier.toLowerCase();const lookup=e==="admin"?"admin@stride.local":e;const {rows}=await pool.query("select id,display_name,email,role,password_hash from users where lower(email)=lower($1)",[lookup]);const u=rows[0];
  if(!u||!(await bcrypt.compare(password,u.password_hash||"")))return res.status(401).json({error:"invalid_credentials"});
  const safe={id:u.id,display_name:u.display_name,email:u.email,role:u.role};res.json({user:safe,token:token(safe)});
  }catch(e){console.error("login_error",e);res.status(500).json({error:"database_error"})}
@@ -75,10 +75,11 @@ app.post("/api/trades",auth,async(req,res)=>{
   res.status(201).json({...rows[0],simulation_only:true});
  }catch(e){await client.query("rollback").catch(()=>{});console.error(e);res.status(500).json({error:"database_error"})}finally{client.release()}
 });
-app.get("/api/admin/users",auth,admin,async(_req,res)=>{const {rows}=await pool.query("select u.id,u.display_name,u.email,u.role,coalesce(s.mode,'RANDOM') simulation_mode,coalesce(s.profit_percent,s.pnl_percent,5) simulation_profit_percent,coalesce(s.loss_percent,s.pnl_percent,5) simulation_loss_percent,coalesce(s.enabled,true) simulation_enabled from users u left join simulation_controls s on s.user_id=u.id order by u.created_at desc");res.json(rows)});
+app.get("/api/admin/users",auth,admin,async(_req,res)=>{const {rows}=await pool.query("select u.id,u.display_name,u.email,u.role,u.created_at,coalesce((select sum(w.balance) from wallets w where w.user_id=u.id),0) balance,coalesce(s.mode,'RANDOM') simulation_mode,coalesce(s.profit_percent,s.pnl_percent,5) simulation_profit_percent,coalesce(s.loss_percent,s.pnl_percent,5) simulation_loss_percent,coalesce(s.enabled,true) simulation_enabled from users u left join simulation_controls s on s.user_id=u.id order by u.created_at desc");res.json(rows)});
+app.get("/api/admin/users/:userId/trades",auth,admin,async(req,res)=>{const id=Number(req.params.userId);if(!Number.isInteger(id))return res.status(400).json({error:"invalid_user"});const {rows}=await pool.query("select id,side,symbol,amount,simulated_pnl,pnl_percent,mode,outcome,created_at from trades where user_id=$1 order by created_at desc limit 500",[id]);res.json(rows)});
 app.put("/api/admin/simulation-controls/:userId",auth,admin,async(req,res)=>{
  const id=Number(req.params.userId),{mode,profitPercent,lossPercent,enabled}=req.body||{};
- const modes=["RANDOM","BUY_PROFIT_SELL_LOSS","BUY_LOSS_SELL_PROFIT","BUY_PROFIT_SELL_PROFIT","BUY_LOSS_SELL_LOSS"];
+ const modes=["RANDOM","BUY_PROFIT_SELL_LOSS","BUY_LOSS_SELL_PROFIT","BUY_PROFIT_SELL_PROFIT","BUY_LOSS_SELL_LOSS","PROFIT","LOSS"];
  if(!Number.isInteger(id)||!modes.includes(String(mode))||!Number.isFinite(Number(profitPercent))||!Number.isFinite(Number(lossPercent))||Number(profitPercent)<0||Number(profitPercent)>100||Number(lossPercent)<0||Number(lossPercent)>100||typeof enabled!=="boolean")return res.status(400).json({error:"invalid_simulation_control"});
  const {rows}=await pool.query("insert into simulation_controls(user_id,mode,pnl_percent,profit_percent,loss_percent,enabled) values($1,$2,$3,$4,$5,$6) on conflict(user_id) do update set mode=excluded.mode,pnl_percent=excluded.pnl_percent,profit_percent=excluded.profit_percent,loss_percent=excluded.loss_percent,enabled=excluded.enabled,updated_at=now() returning user_id,mode,profit_percent,loss_percent,enabled",[id,String(mode),Number(profitPercent),Number(profitPercent),Number(lossPercent),enabled]);
  res.json({simulation_only:true,control:rows[0]});
