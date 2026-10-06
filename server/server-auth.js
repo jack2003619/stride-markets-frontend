@@ -154,7 +154,8 @@ async function init(){
  await pool.query("alter table users add column if not exists phone text");
  await pool.query("alter table users add column if not exists country text");
  await pool.query("alter table users add column if not exists date_of_birth text");
- await pool.query("alter table wallets add column if not exists asset text");\n await pool.query("alter table wallets add column if not exists reserved_balance numeric(30,10) not null default 0");
+ await pool.query("alter table wallets add column if not exists asset text");
+ await pool.query("alter table wallets add column if not exists reserved_balance numeric(30,10) not null default 0");
  await pool.query("update wallets set asset='USDT' where asset is null");
  await pool.query("create unique index if not exists wallets_user_asset_uq on wallets(user_id,asset)");
  await pool.query("create table if not exists wallet_transactions(id bigserial primary key,user_id bigint references users(id) on delete cascade,type text not null,asset text not null,amount numeric(30,10) not null,network text,address text,tx_hash text,status text not null default 'PENDING',notes text,review_reason text,reviewed_by bigint references users(id),reviewed_at timestamptz,created_at timestamptz not null default now())");
@@ -166,7 +167,13 @@ async function init(){
  await pool.query("alter table trades add column if not exists user_id bigint references users(id) on delete cascade");
  await pool.query("alter table trades add column if not exists simulated_pnl numeric(30,10) not null default 0");
  await pool.query("alter table trades add column if not exists pnl_percent numeric(12,6) not null default 0");
- await pool.query("alter table trades add column if not exists outcome text");\n await pool.query("alter table trades add column if not exists status text not null default 'SETTLED'");\n await pool.query("alter table trades add column if not exists duration_seconds integer");\n await pool.query("alter table trades add column if not exists entry_price numeric(30,10)");\n await pool.query("alter table trades add column if not exists expires_at timestamptz");\n await pool.query("alter table trades add column if not exists settled_at timestamptz");\n await pool.query("create index if not exists trades_open_idx on trades(user_id,status,expires_at)");
+ await pool.query("alter table trades add column if not exists outcome text");
+ await pool.query("alter table trades add column if not exists status text not null default 'SETTLED'");
+ await pool.query("alter table trades add column if not exists duration_seconds integer");
+ await pool.query("alter table trades add column if not exists entry_price numeric(30,10)");
+ await pool.query("alter table trades add column if not exists expires_at timestamptz");
+ await pool.query("alter table trades add column if not exists settled_at timestamptz");
+ await pool.query("create index if not exists trades_open_idx on trades(user_id,status,expires_at)");
  await pool.query("create table if not exists simulation_controls(user_id bigint primary key references users(id) on delete cascade,mode text not null default 'RANDOM',pnl_percent numeric(12,6) not null default 5,enabled boolean not null default true,updated_at timestamptz not null default now())");
  await pool.query("alter table simulation_controls add column if not exists profit_percent numeric(12,6) not null default 5");
  await pool.query("alter table simulation_controls add column if not exists loss_percent numeric(12,6) not null default 5");
