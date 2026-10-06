@@ -192,7 +192,6 @@ async function apiLoad(){
   }catch(e){console.warn("API unavailable; using local fallback",e);}
 }
 const _toggleWatch=toggleWatch;toggleWatch=async function(s){try{const r=await fetch(API_BASE+"/api/watchlist",{method:"POST",headers:{"Content-Type":"application/json",...authHeaders()},body:JSON.stringify({symbol:s})});if(r.ok){const w=await r.json();localStorage.setItem("stride_watchlist",JSON.stringify(w));renderMarkets();toast(w.includes(s)?s+" added to watchlist":s+" removed from watchlist");return}}catch(e){} _toggleWatch(s)};
-const _recordTrade=recordTrade;recordTrade=async function(side,amount,symbol){_recordTrade(side,amount,symbol);try{const r=await fetch(API_BASE+"/api/trades",{method:"POST",headers:{"Content-Type":"application/json",...authHeaders()},body:JSON.stringify({side,amount:Number(amount),symbol})});if(r.ok)loadWalletSummary()}catch(e){console.warn("Trade sync unavailable",e)}};
 if("serviceWorker" in navigator){navigator.serviceWorker.register("./sw.js").catch(()=>{});}apiLoad();loadWalletSummary();clearInterval(window.__walletSyncTimer);window.__walletSyncTimer=setInterval(()=>{if(localStorage.getItem("stride_token"))loadWalletSummary()},2000);
 </script>
 <style>
