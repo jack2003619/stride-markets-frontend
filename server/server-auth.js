@@ -48,34 +48,45 @@ app.get("/api/watchlist",auth,async(req,res)=>{const {rows}=await pool.query("se
 app.post("/api/watchlist",auth,async(req,res)=>{const {symbol}=req.body||{};if(!symbol)return res.status(400).json({error:"invalid_symbol"});const q=await pool.query("select 1 from watchlist where user_id=$1 and symbol=$2",[req.user.id,symbol]);if(q.rowCount)await pool.query("delete from watchlist where user_id=$1 and symbol=$2",[req.user.id,symbol]);else await pool.query("insert into watchlist(user_id,symbol) values($1,$2)",[req.user.id,symbol]);const {rows}=await pool.query("select symbol from watchlist where user_id=$1 order by created_at desc",[req.user.id]);res.json(rows.map(x=>x.symbol))});
 
 app.post("/api/trades",auth,async(req,res)=>{
- const {side,symbol,amount}=req.body||{}; const n=Number(amount);
- if(!["BUY","SELL"].includes(side)||!symbol||!Number.isFinite(n)||n<=0)return res.status(400).json({error:"invalid_trade"});
+ const {side,symbol,amount,durationSeconds,entryPrice}=req.body||{}; const n=Number(amount), dur=Number(durationSeconds||60), ep=Number(entryPrice||0);
+ const cleanSymbol=String(symbol||"").toUpperCase();
+ if(!["BUY","SELL"].includes(side)||!cleanSymbol||!Number.isFinite(n)||n<=0||!Number.isFinite(dur)||dur<10||dur>86400)return res.status(400).json({error:"invalid_trade"});
  const client=await pool.connect();
  try{
   await client.query("begin");
-  if(!(await client.query("select 1 from assets where symbol=$1 and active=true",[symbol])).rowCount){await client.query("rollback");return res.status(400).json({error:"invalid_asset"})}
-  const bal=await client.query("select balance from wallets where user_id=$1 and asset='USDT' for update",[req.user.id]);
-  const available=Number(bal.rows[0]?.balance||0);
+  const assetSymbol=cleanSymbol.endsWith("USDT")?cleanSymbol.slice(0,-4):cleanSymbol;
+  if(!(await client.query("select 1 from assets where symbol=$1 and active=true",[assetSymbol])).rowCount){await client.query("rollback");return res.status(400).json({error:"invalid_asset"})}
+  const bal=await client.query("select balance,coalesce(reserved_balance,0) reserved_balance from wallets where user_id=$1 and asset='USDT' for update",[req.user.id]);
+  const available=Number(bal.rows[0]?.balance||0)-Number(bal.rows[0]?.reserved_balance||0);
   if(available<=0||n>available){await client.query("rollback");return res.status(400).json({error:"insufficient_balance"})}
   const c=(await client.query("select mode,coalesce(profit_percent,pnl_percent,5) profit_percent,coalesce(loss_percent,pnl_percent,5) loss_percent,enabled from simulation_controls where user_id=$1",[req.user.id])).rows[0]||{mode:"RANDOM",profit_percent:5,loss_percent:5,enabled:true};
-  const pp=Math.abs(Number(c.profit_percent||5)), lp=Math.abs(Number(c.loss_percent||5));
-  let p=0;
-  if(c.enabled){
-   if(c.mode==="BUY_PROFIT_SELL_LOSS")p=side==="BUY"?pp:-lp;
-   else if(c.mode==="BUY_LOSS_SELL_PROFIT")p=side==="BUY"?-lp:pp;
-   else if(c.mode==="BUY_PROFIT_SELL_PROFIT")p=pp;
-   else if(c.mode==="BUY_LOSS_SELL_LOSS")p=-lp;
-   else if(c.mode==="PROFIT")p=pp;
-   else if(c.mode==="LOSS")p=-lp;
-   else p=Number((Math.random()*(pp+lp)-lp).toFixed(4));
-  }
-  const pnl=Number((n*p/100).toFixed(8));
-  const outcome=pnl>0?"PROFIT":pnl<0?"LOSS":"FLAT";
-  if(pnl!==0)await client.query("update wallets set balance=balance+$1,updated_at=now() where user_id=$2 and asset='USDT'",[pnl,req.user.id]);
-  const {rows}=await client.query("insert into trades(user_id,side,symbol,amount,simulated_pnl,pnl_percent,mode,outcome) values($1,$2,$3,$4,$5,$6,$7,$8) returning id,side,symbol,amount,simulated_pnl,pnl_percent,mode,outcome,created_at",[req.user.id,side,symbol,n,pnl,p,String(c.mode),outcome]);
+  const expiresAt=new Date(Date.now()+Math.round(dur*1000));
+  const {rows}=await client.query("insert into trades(user_id,side,symbol,amount,simulated_pnl,pnl_percent,mode,outcome,status,duration_seconds,entry_price,expires_at) values($1,$2,$3,$4,0,0,$5,'PENDING','OPEN',$6,$7,$8) returning id,side,symbol,amount,simulated_pnl,pnl_percent,mode,outcome,status,duration_seconds,entry_price,expires_at,created_at",[req.user.id,side,assetSymbol,n,String(c.mode),Math.round(dur),Number.isFinite(ep)&&ep>0?ep:null,expiresAt]);
+  await client.query("update wallets set reserved_balance=coalesce(reserved_balance,0)+$1,updated_at=now() where user_id=$2 and asset='USDT'",[n,req.user.id]);
   await client.query("commit");
-  res.status(201).json({...rows[0],simulation_only:true});
+  res.status(201).json({...rows[0],simulation_only:true,available_balance:available-n});
  }catch(e){await client.query("rollback").catch(()=>{});console.error(e);res.status(500).json({error:"database_error"})}finally{client.release()}
+});
+app.get("/api/trades/open",auth,async(req,res)=>{
+ try{const {rows}=await pool.query("select id,side,symbol,amount,simulated_pnl,pnl_percent,mode,outcome,status,duration_seconds,entry_price,expires_at,created_at from trades where user_id=$1 and status='OPEN' order by created_at desc limit 100",[req.user.id]);res.json(rows)}catch(e){res.status(500).json({error:"trades_unavailable"})}
+});
+app.post("/api/trades/:id/settle",auth,async(req,res)=>{
+ const id=Number(req.params.id); if(!Number.isInteger(id))return res.status(400).json({error:"invalid_trade"});
+ const client=await pool.connect();
+ try{
+  await client.query("begin");
+  const q=await client.query("select t.*,coalesce(s.profit_percent,s.pnl_percent,5) profit_percent,coalesce(s.loss_percent,s.pnl_percent,5) loss_percent,s.mode as current_mode,s.enabled from trades t left join simulation_controls s on s.user_id=t.user_id where t.id=$1 and t.user_id=$2 for update",[id,req.user.id]);
+  if(!q.rowCount){await client.query("rollback");return res.status(404).json({error:"trade_not_found"})}
+  const t=q.rows[0];
+  if(t.status!=="OPEN"){await client.query("rollback");return res.json({...t,simulation_only:true})}
+  if(new Date(t.expires_at).getTime()>Date.now()){await client.query("rollback");return res.status(409).json({error:"trade_not_expired",expires_at:t.expires_at})}
+  const pp=Math.abs(Number(t.profit_percent||5)),lp=Math.abs(Number(t.loss_percent||5));let p=0;const mode=String(t.current_mode||t.mode||"RANDOM");
+  if(t.enabled!==false){if(mode==="BUY_PROFIT_SELL_LOSS")p=t.side==="BUY"?pp:-lp;else if(mode==="BUY_LOSS_SELL_PROFIT")p=t.side==="BUY"?-lp:pp;else if(mode==="BUY_PROFIT_SELL_PROFIT")p=pp;else if(mode==="BUY_LOSS_SELL_LOSS")p=-lp;else if(mode==="PROFIT")p=pp;else if(mode==="LOSS")p=-lp;else p=Number((Math.random()*(pp+lp)-lp).toFixed(4))}
+  const pnl=Number((Number(t.amount)*p/100).toFixed(8)), outcome=pnl>0?"PROFIT":pnl<0?"LOSS":"FLAT";
+  await client.query("update wallets set reserved_balance=greatest(0,coalesce(reserved_balance,0)-$1),balance=balance+$2,updated_at=now() where user_id=$3 and asset='USDT'",[Number(t.amount),pnl,req.user.id]);
+  const {rows}=await client.query("update trades set simulated_pnl=$1,pnl_percent=$2,mode=$3,outcome=$4,status='SETTLED',settled_at=now() where id=$5 returning id,side,symbol,amount,simulated_pnl,pnl_percent,mode,outcome,status,duration_seconds,entry_price,expires_at,created_at,settled_at",[pnl,p,mode,outcome,id]);
+  await client.query("commit");res.json({...rows[0],simulation_only:true});
+ }catch(e){await client.query("rollback").catch(()=>{});console.error(e);res.status(500).json({error:"settlement_failed"})}finally{client.release()}
 });
 app.get("/api/admin/users",auth,admin,async(_req,res)=>{const {rows}=await pool.query("select u.id,u.display_name,u.email,u.role,u.created_at,coalesce((select sum(w.balance) from wallets w where w.user_id=u.id),0) balance,coalesce(s.mode,'RANDOM') simulation_mode,coalesce(s.profit_percent,s.pnl_percent,5) simulation_profit_percent,coalesce(s.loss_percent,s.pnl_percent,5) simulation_loss_percent,coalesce(s.enabled,true) simulation_enabled from users u left join simulation_controls s on s.user_id=u.id order by u.created_at desc");res.json(rows)});
 app.get("/api/admin/users/:userId/trades",auth,admin,async(req,res)=>{const id=Number(req.params.userId);if(!Number.isInteger(id))return res.status(400).json({error:"invalid_user"});const {rows}=await pool.query("select id,side,symbol,amount,simulated_pnl,pnl_percent,mode,outcome,created_at from trades where user_id=$1 order by created_at desc limit 500",[id]);res.json(rows)});
@@ -143,7 +154,7 @@ async function init(){
  await pool.query("alter table users add column if not exists phone text");
  await pool.query("alter table users add column if not exists country text");
  await pool.query("alter table users add column if not exists date_of_birth text");
- await pool.query("alter table wallets add column if not exists asset text");
+ await pool.query("alter table wallets add column if not exists asset text");\n await pool.query("alter table wallets add column if not exists reserved_balance numeric(30,10) not null default 0");
  await pool.query("update wallets set asset='USDT' where asset is null");
  await pool.query("create unique index if not exists wallets_user_asset_uq on wallets(user_id,asset)");
  await pool.query("create table if not exists wallet_transactions(id bigserial primary key,user_id bigint references users(id) on delete cascade,type text not null,asset text not null,amount numeric(30,10) not null,network text,address text,tx_hash text,status text not null default 'PENDING',notes text,review_reason text,reviewed_by bigint references users(id),reviewed_at timestamptz,created_at timestamptz not null default now())");
@@ -155,7 +166,7 @@ async function init(){
  await pool.query("alter table trades add column if not exists user_id bigint references users(id) on delete cascade");
  await pool.query("alter table trades add column if not exists simulated_pnl numeric(30,10) not null default 0");
  await pool.query("alter table trades add column if not exists pnl_percent numeric(12,6) not null default 0");
- await pool.query("alter table trades add column if not exists outcome text");
+ await pool.query("alter table trades add column if not exists outcome text");\n await pool.query("alter table trades add column if not exists status text not null default 'SETTLED'");\n await pool.query("alter table trades add column if not exists duration_seconds integer");\n await pool.query("alter table trades add column if not exists entry_price numeric(30,10)");\n await pool.query("alter table trades add column if not exists expires_at timestamptz");\n await pool.query("alter table trades add column if not exists settled_at timestamptz");\n await pool.query("create index if not exists trades_open_idx on trades(user_id,status,expires_at)");
  await pool.query("create table if not exists simulation_controls(user_id bigint primary key references users(id) on delete cascade,mode text not null default 'RANDOM',pnl_percent numeric(12,6) not null default 5,enabled boolean not null default true,updated_at timestamptz not null default now())");
  await pool.query("alter table simulation_controls add column if not exists profit_percent numeric(12,6) not null default 5");
  await pool.query("alter table simulation_controls add column if not exists loss_percent numeric(12,6) not null default 5");
