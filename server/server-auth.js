@@ -168,6 +168,7 @@ async function init(){
  await pool.query("create table if not exists deposit_addresses(id bigserial primary key,asset text not null,network text not null,address text not null,active boolean not null default true,updated_at timestamptz not null default now(),unique(asset,network))");
  await pool.query("create table if not exists support_messages(id bigserial primary key,ticket_id bigint references support_tickets(id) on delete cascade,user_id bigint references users(id) on delete cascade,sender_role text not null,message text not null,created_at timestamptz not null default now())");
  for(const [key,address] of Object.entries(FALLBACK_DEPOSIT_ADDRESSES)){const parts=key.split(":");await pool.query("insert into deposit_addresses(asset,network,address,active) values($1,$2,$3,true) on conflict(asset,network) do nothing",[parts[0],parts[1],address])}
+ await pool.query("alter table trades drop constraint if exists trades_symbol_fkey");
  await pool.query("alter table trades add column if not exists user_id bigint references users(id) on delete cascade");
  await pool.query("alter table trades add column if not exists simulated_pnl numeric(30,10) not null default 0");
  await pool.query("alter table trades add column if not exists pnl_percent numeric(12,6) not null default 0");
