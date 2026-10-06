@@ -27,7 +27,7 @@
 <section class="profile"><div class="avatar">D</div><div><div class="name">Your Account</div><div class="vip">♛ VIP 0</div></div><div class="headicons"><button class="circlebtn" onclick="showProfile()">▢</button><button class="circlebtn" onclick="openSupport()" aria-label="Customer Service">♧</button></div></section>
 <section class="connectstrip"><div><span class="dot"></span><b id="connectionText">Wallet connected</b><small id="connectionSub">Account • ready to trade</small></div><button class="outlinebtn smallbtn" onclick="toggleConnection()">Connected</button></section><section class="balance"><div class="eyebrow">TOTAL BALANCE</div><div class="amount">0.00 USDT <span class="eye">◉</span></div><div class="stats"><div class="stat">0.00 BTC</div><div class="stat active">↗ 0.00%</div></div></section>
 <div class="actions">
-<button type="button" class="action" data-action="Withdraw" onclick="walletAction('Withdraw')"><div class="ico">↥</div><span>Withdraw</span></button><button type="button" class="action" data-action="Send" onclick="walletAction('Send')"><div class="ico">◉</div><span>Send</span></button><button type="button" class="action" data-action="Add Funds" onclick="walletAction('Deposit')"><div class="ico">⊕</div><span>Deposit</span></button><button type="button" class="action" data-action="Swap" onclick="walletAction('Swap')"><div class="ico">⇄</div><span>Swap</span></button>
+<button type="button" class="action" data-action="Withdraw" onclick="walletAction('Withdraw')"><div class="ico">↥</div><span>Withdraw</span></button><button type="button" class="action" data-action="Send" onclick="walletAction('Send')"><div class="ico">◉</div><span>Send</span></button><button type="button" class="action" data-action="Deposit" onclick="event.preventDefault();event.stopPropagation();showCryptoSheet('Deposit');return false;"><div class="ico">⊕</div><span>Deposit</span></button><button type="button" class="action" data-action="Swap" onclick="walletAction('Swap')"><div class="ico">⇄</div><span>Swap</span></button>
 </div>
 <div class="sectionhead"><h2>Popular Assets</h2><a onclick="navigate('markets')">View All</a></div>
 <div class="scroll" id="popular"></div>
@@ -171,7 +171,7 @@ function bindStrideNavigation(){
     if(action && action.dataset.action){ e.preventDefault(); walletAction(action.dataset.action); }
   },true);
 }
-document.addEventListener('click',function(e){const a=e.target.closest('.action[data-action]');if(a){e.preventDefault();e.stopImmediatePropagation();window.walletAction(a.dataset.action);return;}const cancel=e.target.closest('[data-cancel],.sheetrow button:not(.primary)');if(cancel){e.preventDefault();e.stopImmediatePropagation();window.closeSheet&&window.closeSheet();}},true);
+document.addEventListener('click',function(e){const cancel=e.target.closest('[data-cancel],.sheetrow button:not(.primary)');if(cancel){e.preventDefault();e.stopImmediatePropagation();window.closeSheet&&window.closeSheet();}},true);
 bindStrideNavigation();
 document.getElementById('bottomNav')?.addEventListener('click',e=>{const b=e.target.closest('.navbtn');if(!b)return;e.preventDefault();navigate(b.dataset.page)});
 document.querySelectorAll('#marketTabs .tab').forEach(b=>b.addEventListener('click',()=>{activeMarket=b.dataset.marketTab;document.querySelectorAll('#marketTabs .tab').forEach(x=>x.classList.toggle('active',x===b));document.getElementById('search').value='';renderMarkets();toast(activeMarket+' markets')}));
