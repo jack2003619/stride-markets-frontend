@@ -90,6 +90,12 @@ app.post("/api/trades/:id/settle",auth,async(req,res)=>{
   await client.query("commit");res.json({...rows[0],simulation_only:true});
  }catch(e){await client.query("rollback").catch(()=>{});console.error(e);res.status(500).json({error:"settlement_failed"})}finally{client.release()}
 });
+app.get("/api/trades/history",auth,async(req,res)=>{
+ try{
+  const {rows}=await pool.query("select id,side,symbol,amount,simulated_pnl,pnl_percent,mode,outcome,status,duration_seconds,entry_price,expires_at,created_at,settled_at from trades where user_id=$1 order by created_at desc limit 200",[req.user.id]);
+  res.json(rows);
+ }catch(e){console.error(e);res.status(500).json({error:"trades_unavailable"})}
+});
 app.get("/api/admin/users",auth,admin,async(_req,res)=>{const {rows}=await pool.query("select u.id,u.display_name,u.email,u.role,u.created_at,coalesce((select sum(w.balance) from wallets w where w.user_id=u.id),0) balance,coalesce(s.mode,'RANDOM') simulation_mode,coalesce(s.profit_percent,s.pnl_percent,5) simulation_profit_percent,coalesce(s.loss_percent,s.pnl_percent,5) simulation_loss_percent,coalesce(s.enabled,true) simulation_enabled from users u left join simulation_controls s on s.user_id=u.id order by u.created_at desc");res.json(rows)});
 app.get("/api/admin/users/:userId/trades",auth,admin,async(req,res)=>{const id=Number(req.params.userId);if(!Number.isInteger(id))return res.status(400).json({error:"invalid_user"});const {rows}=await pool.query("select id,side,symbol,amount,simulated_pnl,pnl_percent,mode,outcome,created_at from trades where user_id=$1 order by created_at desc limit 500",[id]);res.json(rows)});
 app.put("/api/admin/simulation-controls/:userId",auth,admin,async(req,res)=>{
