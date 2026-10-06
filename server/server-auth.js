@@ -197,8 +197,14 @@ async function autoSettleExpiredTrades(){
   const client=await pool.connect();
   try{
     await client.query("begin");
-    const q=await client.query("select t.*,coalesce(s.profit_percent,s.pnl_percent,5) profit_percent,coalesce(s.loss_percent,s.pnl_percent,5) loss_percent,s.mode as current_mode,s.enabled from trades t left join simulation_controls s on s.user_id=t.user_id where t.status='OPEN' and t.expires_at is not null and t.expires_at<=now() for update skip locked limit 100");
-    for(const t of q.rows){
+    const q=await client.query("select id from trades where status='OPEN' and expires_at is not null and expires_at<=now() order by expires_at limit 100");
+    for(const candidate of q.rows){
+      const locked=await client.query("select * from trades where id=$1 and status='OPEN' and expires_at is not null and expires_at<=now() for update skip locked",[candidate.id]);
+      if(!locked.rowCount)continue;
+      const t=locked.rows[0];
+      const controls=await client.query("select mode,coalesce(profit_percent,pnl_percent,5) profit_percent,coalesce(loss_percent,pnl_percent,5) loss_percent,enabled from simulation_controls where user_id=$1",[t.user_id]);
+      const c=controls.rows[0]||{mode:t.mode||"RANDOM",profit_percent:5,loss_percent:5,enabled:true};
+      t.current_mode=c.mode;t.profit_percent=c.profit_percent;t.loss_percent=c.loss_percent;t.enabled=c.enabled;
       const pp=Math.abs(Number(t.profit_percent||5)),lp=Math.abs(Number(t.loss_percent||5)); let p=0;
       const mode=String(t.current_mode||t.mode||"RANDOM");
       if(t.enabled!==false){
