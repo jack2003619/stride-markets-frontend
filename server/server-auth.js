@@ -55,7 +55,9 @@ app.post("/api/trades",auth,async(req,res)=>{
  try{
   await client.query("begin");
   const assetSymbol=cleanSymbol.endsWith("USDT")?cleanSymbol.slice(0,-4):cleanSymbol;
-  if(!(await client.query("select 1 from assets where symbol=$1 and active=true",[assetSymbol])).rowCount){await client.query("rollback");return res.status(400).json({error:"invalid_asset"})}
+  // Simulation trades use the live market symbol selected in the UI. Do not require
+  // a separate DB asset row, because the market list comes from the public feed.
+  if(!/^[A-Z0-9]{2,20}$/.test(assetSymbol)){await client.query("rollback");return res.status(400).json({error:"invalid_asset"})}
   const bal=await client.query("select balance,coalesce(reserved_balance,0) reserved_balance from wallets where user_id=$1 and asset='USDT' for update",[req.user.id]);
   const available=Number(bal.rows[0]?.balance||0)-Number(bal.rows[0]?.reserved_balance||0);
   if(available<=0||n>available){await client.query("rollback");return res.status(400).json({error:"insufficient_balance"})}
