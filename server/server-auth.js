@@ -78,7 +78,7 @@ app.get("/api/market/news",async(req,res)=>{
     const r=await fetch(url,{signal:ctl.signal,headers:{"user-agent":"Stride-Markets/1.0"}});
     clearTimeout(timer);if(!r.ok)continue;
     const xml=await r.text();
-    for(const m of xml.matchAll(/<item[\\s\\S]*?<\\/item>/gi)){
+    for(const chunk of xml.split("<item").slice(1)){ const m=["<item"+chunk.split("</item>")[0]+"</item>"];
      const item=m[0],get=(tag)=>{const z=item.match(new RegExp("<"+tag+"[^>]*>([\\s\\S]*?)<\\/"+tag+">","i"));return z?z[1].replace(/<!\\[CDATA\\[|\\]\\]>/g,"").replace(/<[^>]+>/g,"").trim():""};
      const title=get("title"),link=get("link"),date=get("pubDate")||get("published"),source=get("dc:creator")||new URL(url).hostname.replace(/^www\\./,"");
      if(title&&link)all.push({title,source,published_at:date?new Date(date).toISOString():new Date().toISOString(),url});
