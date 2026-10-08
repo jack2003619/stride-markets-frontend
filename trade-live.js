@@ -2,7 +2,7 @@
 function renderOpenOrders(rows){
  const box=document.getElementById('ptOrders'); if(!box)return;
  if(!rows.length){box.innerHTML='<div class="pt-note">No open trades</div>';return}
- box.innerHTML=rows.map(o=>'<div class="pt-open" data-id="'+o.id+'"><div style="display:flex;justify-content:space-between"><b>'+esc(o.side)+' • '+esc(o.symbol)+'</b><span class="timer" data-exp="'+new Date(o.expires_at).getTime()+'">—</span></div><div style="display:flex;justify-content:space-between;margin-top:5px"><span>'+Number(o.amount).toFixed(4)+' USDT</span><span class="pl" data-entry="'+Number(o.entry_price||0)+'" data-side="'+esc(o.side)+'">P/L —</span></div></div>').join('');
+ box.innerHTML=rows.map(o=>'<div class="pt-open" data-id="'+o.id+'" data-amount="'+Number(o.amount||0)+'"><div style="display:flex;justify-content:space-between"><b>'+esc(o.side)+' • '+esc(o.symbol)+'</b><span class="timer" data-exp="'+new Date(o.expires_at).getTime()+'">—</span></div><div style="display:flex;justify-content:space-between;margin-top:5px"><span>'+Number(o.amount).toFixed(4)+' USDT</span><span class="pl" data-entry="'+Number(o.entry_price||0)+'" data-side="'+esc(o.side)+'">P/L —</span></div></div>').join('');
 }
 async function refreshOpenOrders(){
  try{const token=localStorage.getItem('stride_token');if(!token)return;const r=await fetch((window.API_BASE||'https://stride-markets-api-87lf.onrender.com')+'/api/trades/open',{headers:{Authorization:'Bearer '+token},cache:'no-store'});if(!r.ok)return;const rows=await r.json();renderOpenOrders(rows)}catch{}
