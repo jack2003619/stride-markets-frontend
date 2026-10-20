@@ -80,6 +80,15 @@ body{background:#090611}
 #bottomNav{grid-template-columns:repeat(5,minmax(0,1fr));padding-bottom:env(safe-area-inset-bottom);background:rgba(10,7,17,.96);backdrop-filter:blur(18px)}
 #bottomNav .navbtn[data-page="settings"]{display:none}
 @media(max-width:520px){.app{max-width:none}.top{padding:16px 24px}.profile{padding:16px 24px}.balance{margin:14px 24px 24px}.actions{margin-left:24px;margin-right:24px;gap:10px}.actions .action{height:72px}.actions .action span{font-size:14px}.sectionhead{margin-left:24px;margin-right:24px}#wallet{padding:0 24px}#wallet .asset-icon{width:54px;height:54px;flex-basis:54px}#wallet .asset-row{gap:12px;padding:21px 0}#wallet .asset-value{font-size:14px}}
+</style><style>
+/* Make primary wallet actions unmistakably visible on mobile */
+#home .actions,#wallet .actions{display:grid!important;position:relative!important;z-index:20!important;visibility:visible!important;opacity:1!important;overflow:visible!important}
+#home .actions .action,#wallet .actions .action{display:flex!important;align-items:center!important;justify-content:center!important;min-height:66px!important;height:auto!important;padding:14px 4px!important;visibility:visible!important;opacity:1!important;border:1px solid #5b466f!important;border-radius:16px!important;background:#130e1d!important;color:#f7f0ff!important;box-shadow:none!important}
+#home .actions .action:first-child,#wallet .actions .action:first-child{background:#b99ae9!important;border-color:#b99ae9!important;color:#150c20!important}
+#home .actions .action span,#wallet .actions .action span{display:block!important;visibility:visible!important;opacity:1!important;color:inherit!important;font-size:14px!important;font-weight:700!important;margin:0!important;white-space:nowrap}
+#home .actions .action .ico,#wallet .actions .action .ico{display:none!important}
+#wallet .actions{margin-top:28px!important}
+@media(max-width:380px){#home .actions{gap:6px!important;margin-left:16px!important;margin-right:16px!important}#home .actions .action span{font-size:12px!important}#wallet .actions{gap:8px!important}}
 </style></head>
 <body><script>(function(){try{const u=JSON.parse(localStorage.getItem("stride_user")||"null");const n=u?.display_name||u?.displayName||u?.accountName||u?.email?.split("@")[0];if(n){document.addEventListener("DOMContentLoaded",function(){const el=document.querySelector(".name");if(el)el.textContent=n;});}}catch(e){console.error(e)}window.addEventListener("error",function(e){console.error("Stride UI error",e.error||e.message)});})();</script>
 <script>if(!localStorage.getItem("stride_token")){location.replace("./auth.html");}</script><div class="app">
