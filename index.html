@@ -91,7 +91,7 @@ body{background:#090611}
 @media(max-width:380px){#home .actions{gap:6px!important;margin-left:16px!important;margin-right:16px!important}#home .actions .action span{font-size:12px!important}#wallet .actions{gap:8px!important}}
 </style></head>
 <body><script>(function(){try{const u=JSON.parse(localStorage.getItem("stride_user")||"null");const n=u?.display_name||u?.displayName||u?.accountName||u?.email?.split("@")[0];if(n){document.addEventListener("DOMContentLoaded",function(){const el=document.querySelector(".name");if(el)el.textContent=n;});}}catch(e){console.error(e)}window.addEventListener("error",function(e){console.error("Stride UI error",e.error||e.message)});})();</script>
-<script>(function(){try{const token=localStorage.getItem("stride_token");const active=sessionStorage.getItem("stride_session_active")==="1";if(!token||!active){location.replace("./auth.html");}}catch(e){location.replace("./auth.html");}})();</script><div class="app">
+<script>(function(){try{const token=localStorage.getItem("stride_token");if(!token){location.replace("./auth.html");}}catch(e){location.replace("./auth.html");}})();</script><div class="app">
 <header class="top"><div class="brand"><img src="logo.png"><b>Stride</b><span>MARKETS</span></div></header>
 <main id="home" class="page">
 <section class="profile"><div class="avatar">D</div><div><div class="name">Your Account</div><div class="vip">♛ VIP 0</div></div><div class="headicons"><button class="circlebtn" onclick="showProfile()">◉</button><button class="circlebtn" onclick="openSupport()" aria-label="Customer Service">♧</button></div></section>
