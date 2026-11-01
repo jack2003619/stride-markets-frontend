@@ -109,7 +109,7 @@ app.post("/api/trades",auth,async(req,res)=>{
   if(available<=0||n>available){await client.query("rollback");return res.status(400).json({error:"insufficient_balance"})}
   const c=(await client.query("select mode,coalesce(profit_percent,pnl_percent,5) profit_percent,coalesce(loss_percent,pnl_percent,5) loss_percent,enabled from simulation_controls where user_id=$1",[req.user.id])).rows[0]||{mode:"RANDOM",profit_percent:5,loss_percent:5,enabled:true};
   const expiresAt=new Date(Date.now()+Math.round(dur*1000));
-  const {rows}=await client.query("insert into trades(user_id,side,symbol,amount,simulated_pnl,pnl_percent,mode,outcome,status,duration_seconds,entry_price,expires_at) values($1,$2,$3,$4,0,0,$5,'PENDING','OPEN',$6,$7,$8) returning id,side,symbol,amount,simulated_pnl,pnl_percent,mode,outcome,status,duration_seconds,entry_price,expires_at,created_at",[req.user.id,side,assetSymbol,n,String(c.mode),Math.round(dur),Number.isFinite(ep)&&ep>0?ep:null,expiresAt]);
+  const {rows}=await client.query("insert into trades(user_id,side,symbol,amount,simulated_pnl,pnl_percent,mode,outcome,status,duration_seconds,entry_price,expires_at,settlement_mode,settlement_profit_percent,settlement_loss_percent,settlement_enabled) values($1,$2,$3,$4,0,0,$5,'PENDING','OPEN',$6,$7,$8,$5,$9,$10,$11) returning id,side,symbol,amount,simulated_pnl,pnl_percent,mode,outcome,status,duration_seconds,entry_price,expires_at,created_at",[req.user.id,side,assetSymbol,n,String(c.mode),Math.round(dur),Number.isFinite(ep)&&ep>0?ep:null,expiresAt,Number(c.profit_percent||5),Number(c.loss_percent||5),c.enabled!==false]);
   await client.query("update wallets set reserved_balance=coalesce(reserved_balance,0)+$1,updated_at=now() where user_id=$2 and asset='USDT'",[n,req.user.id]);
   await client.query("commit");
   res.status(201).json({...rows[0],simulation_only:true,available_balance:available-n});
@@ -123,7 +123,7 @@ app.post("/api/trades/:id/settle",auth,async(req,res)=>{
  const client=await pool.connect();
  try{
   await client.query("begin");
-  const q=await client.query("select t.*,coalesce(s.profit_percent,s.pnl_percent,5) profit_percent,coalesce(s.loss_percent,s.pnl_percent,5) loss_percent,s.mode as current_mode,s.enabled from trades t left join simulation_controls s on s.user_id=t.user_id where t.id=$1 and t.user_id=$2 for update",[id,req.user.id]);
+  const q=await client.query("select t.*,coalesce(t.settlement_profit_percent,5) profit_percent,coalesce(t.settlement_loss_percent,5) loss_percent,coalesce(t.settlement_mode,t.mode,'RANDOM') as current_mode,coalesce(t.settlement_enabled,true) enabled from trades t where t.id=$1 and t.user_id=$2 for update",[id,req.user.id]);
   if(!q.rowCount){await client.query("rollback");return res.status(404).json({error:"trade_not_found"})}
   const t=q.rows[0];
   if(t.status!=="OPEN"){await client.query("rollback");return res.json({...t,simulation_only:true})}
@@ -231,6 +231,10 @@ async function init(){
  await pool.query("alter table trades add column if not exists entry_price numeric(30,10)");
  await pool.query("alter table trades add column if not exists expires_at timestamptz");
  await pool.query("alter table trades add column if not exists settled_at timestamptz");
+ await pool.query("alter table trades add column if not exists settlement_mode text");
+ await pool.query("alter table trades add column if not exists settlement_profit_percent numeric(12,6)");
+ await pool.query("alter table trades add column if not exists settlement_loss_percent numeric(12,6)");
+ await pool.query("alter table trades add column if not exists settlement_enabled boolean not null default true");
  await pool.query("create index if not exists trades_open_idx on trades(user_id,status,expires_at)");
  await pool.query("create table if not exists simulation_controls(user_id bigint primary key references users(id) on delete cascade,mode text not null default 'RANDOM',pnl_percent numeric(12,6) not null default 5,enabled boolean not null default true,updated_at timestamptz not null default now())");
  await pool.query("alter table simulation_controls add column if not exists profit_percent numeric(12,6) not null default 5");
@@ -255,7 +259,7 @@ async function autoSettleExpiredTrades(){
       const locked=await client.query("select * from trades where id=$1 and status='OPEN' and expires_at is not null and expires_at<=now() for update skip locked",[candidate.id]);
       if(!locked.rowCount)continue;
       const t=locked.rows[0];
-      const controls=await client.query("select mode,coalesce(profit_percent,pnl_percent,5) profit_percent,coalesce(loss_percent,pnl_percent,5) loss_percent,enabled from simulation_controls where user_id=$1",[t.user_id]);
+      const controls=await client.query("select coalesce(settlement_mode,mode,'RANDOM') mode,coalesce(settlement_profit_percent,5) profit_percent,coalesce(settlement_loss_percent,5) loss_percent,coalesce(settlement_enabled,true) enabled from trades where id=$1",[t.id]);
       const c=controls.rows[0]||{mode:t.mode||"RANDOM",profit_percent:5,loss_percent:5,enabled:true};
       t.current_mode=c.mode;t.profit_percent=c.profit_percent;t.loss_percent=c.loss_percent;t.enabled=c.enabled;
       const pp=Math.abs(Number(t.profit_percent||5)),lp=Math.abs(Number(t.loss_percent||5)); let p=0;
