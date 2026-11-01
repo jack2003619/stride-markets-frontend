@@ -275,7 +275,7 @@ async function autoSettleExpiredTrades(){
       }
       const pnl=Number((Number(t.amount)*p/100).toFixed(8));
       const outcome=pnl>0?"PROFIT":pnl<0?"LOSS":"FLAT";
-      await client.query("update wallets set reserved_balance=greatest(0,coalesce(reserved_balance,0)-$1),balance=balance+$1+$2,updated_at=now() where user_id=$3 and asset='USDT'",[Number(t.amount),pnl,t.user_id]);
+      await client.query("update wallets set reserved_balance=greatest(0,coalesce(reserved_balance,0)-$1),balance=balance+$2,updated_at=now() where user_id=$3 and asset='USDT'",[Number(t.amount),pnl,t.user_id]);
       await client.query("update trades set simulated_pnl=$1,pnl_percent=$2,mode=$3,outcome=$4,status='SETTLED',settled_at=now() where id=$5 and status='OPEN'",[pnl,p,mode,outcome,t.id]);
     }
     await client.query("commit");
